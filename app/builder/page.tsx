@@ -83,17 +83,25 @@ export default function BuilderPage() {
       })
 
       if (!res.ok) {
-        throw new Error("API request failed")
+        let errorMessage = "API request failed"
+        try {
+          const errorData = await res.json()
+          errorMessage = errorData.details || errorData.error || errorMessage
+        } catch {
+          // fallback to default
+        }
+        throw new Error(errorMessage)
       }
 
       const reader = res.body?.getReader()
-      if (!reader) throw new Error("No reader")
+      if (!reader) throw new Error("Failed to initialize stream reader")
 
       let fullContent = ""
       const decoder = new TextDecoder()
+      let streamBuffer = ""
 
       if (mode === "planning") {
-        // For planning mode, show steps
+        // For planning mode, show initial steps
         const initialSteps: PlanStep[] = [
           { title: t.builder.analyzing, description: "Understanding your requirements...", status: "active" },
           { title: "Planning architecture", description: "Designing component structure...", status: "pending" },
@@ -102,30 +110,15 @@ export default function BuilderPage() {
           { title: t.builder.complete, description: "Ready for preview!", status: "pending" },
         ]
         setPlanSteps(initialSteps)
-
-        // Simulate step progression during streaming
-        setTimeout(() => {
-          setPlanSteps((prev) =>
-            prev.map((s, i) =>
-              i === 0 ? { ...s, status: "complete" } : i === 1 ? { ...s, status: "active" } : s
-            )
-          )
-        }, 2000)
-        setTimeout(() => {
-          setPlanSteps((prev) =>
-            prev.map((s, i) =>
-              i <= 1 ? { ...s, status: "complete" } : i === 2 ? { ...s, status: "active" } : s
-            )
-          )
-        }, 4000)
       }
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
+        streamBuffer += decoder.decode(value, { stream: true })
+        const lines = streamBuffer.split("\n")
+        streamBuffer = lines.pop() || ""
 
         for (const line of lines) {
           const trimmed = line.trim()
@@ -137,71 +130,69 @@ export default function BuilderPage() {
             const parsed = JSON.parse(data)
             if (parsed.content) {
               fullContent += parsed.content
+
+              // Extract code from content dynamically
+              let codeContent = fullContent
+              if (mode === "planning") {
+                try {
+                  // Try to find if we have a complete JSON yet
+                  const jsonStart = fullContent.indexOf("{")
+                  const jsonEnd = fullContent.lastIndexOf("}")
+                  if (jsonStart !== -1 && jsonEnd !== -1) {
+                    const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
+                    const parsedJson = JSON.parse(jsonStr)
+                    if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
+                      setPlanSteps((prev) => {
+                        const newSteps = parsedJson.steps.map(
+                          (s: { title: string; description: string }, idx: number) => ({
+                            title: s.title,
+                            description: s.description,
+                            status: idx < parsedJson.steps.length - 1 ? "complete" as const : "active" as const,
+                          })
+                        )
+                        newSteps.push({
+                          title: t.builder.complete,
+                          description: "Ready for preview!",
+                          status: "pending" as const,
+                        })
+                        return newSteps
+                      })
+                    }
+                    if (parsedJson.code) {
+                      codeContent = parsedJson.code
+                    }
+                  }
+                } catch {
+                  // Not yet valid JSON - extract HTML if available
+                  const htmlStart = fullContent.indexOf("<!DOCTYPE")
+                  if (htmlStart === -1) {
+                    const htmlStart2 = fullContent.indexOf("<html")
+                    if (htmlStart2 !== -1) codeContent = fullContent.slice(htmlStart2)
+                  } else {
+                    codeContent = fullContent.slice(htmlStart)
+                  }
+                }
+              } else {
+                // Fast mode - extract HTML directly
+                const htmlStart = fullContent.indexOf("<!DOCTYPE")
+                if (htmlStart !== -1) {
+                  codeContent = fullContent.slice(htmlStart)
+                } else {
+                  const htmlStart2 = fullContent.indexOf("<html")
+                  if (htmlStart2 !== -1) {
+                    codeContent = fullContent.slice(htmlStart2)
+                  }
+                }
+              }
+              setGeneratedCode(codeContent)
             }
           } catch {
-            // skip
+            // skip unparseable fragments
           }
         }
-
-        // Extract code from content
-        let codeContent = fullContent
-        if (mode === "planning") {
-          try {
-            // Try to parse JSON response
-            const jsonStart = fullContent.indexOf("{")
-            const jsonEnd = fullContent.lastIndexOf("}")
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-              const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
-              const parsed = JSON.parse(jsonStr)
-              if (parsed.steps && Array.isArray(parsed.steps)) {
-                setPlanSteps((prev) => {
-                  const newSteps = parsed.steps.map(
-                    (s: { title: string; description: string }, idx: number) => ({
-                      title: s.title,
-                      description: s.description,
-                      status: idx < parsed.steps.length - 1 ? "complete" as const : "active" as const,
-                    })
-                  )
-                  // Add final complete step
-                  newSteps.push({
-                    title: t.builder.complete,
-                    description: "Ready for preview!",
-                    status: "pending" as const,
-                  })
-                  return newSteps
-                })
-              }
-              if (parsed.code) {
-                codeContent = parsed.code
-              }
-            }
-          } catch {
-            // Not yet valid JSON - extract HTML if available
-            const htmlStart = fullContent.indexOf("<!DOCTYPE")
-            if (htmlStart === -1) {
-              const htmlStart2 = fullContent.indexOf("<html")
-              if (htmlStart2 !== -1) codeContent = fullContent.slice(htmlStart2)
-            } else {
-              codeContent = fullContent.slice(htmlStart)
-            }
-          }
-        } else {
-          // Fast mode - extract HTML directly
-          const htmlStart = fullContent.indexOf("<!DOCTYPE")
-          if (htmlStart !== -1) {
-            codeContent = fullContent.slice(htmlStart)
-          } else {
-            const htmlStart2 = fullContent.indexOf("<html")
-            if (htmlStart2 !== -1) {
-              codeContent = fullContent.slice(htmlStart2)
-            }
-          }
-        }
-
-        setGeneratedCode(codeContent)
       }
 
-      // Complete all steps
+      // Final cleanup and complete all steps
       if (mode === "planning") {
         setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
       }
@@ -210,10 +201,14 @@ export default function BuilderPage() {
         ...prev,
         { role: "assistant", content: fullContent },
       ])
-    } catch {
+    } catch (err: any) {
+      console.error("Builder Error:", err)
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Sorry, there was an error generating your website. Please try again." },
+        {
+          role: "assistant",
+          content: `❌ [V2] Hata: ${err.message || "Bilinmeyen bir hata oluştu. Lütfen Vercel Logs panelini kontrol edin."}`
+        },
       ])
     } finally {
       setLoading(false)
@@ -317,11 +312,10 @@ export default function BuilderPage() {
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-foreground text-background"
-                        : "bg-card border border-border"
-                    }`}
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user"
+                      ? "bg-foreground text-background"
+                      : "bg-card border border-border"
+                      }`}
                   >
                     {msg.role === "assistant" && generatedCode ? (
                       <div className="flex flex-col gap-2">
@@ -417,11 +411,10 @@ export default function BuilderPage() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                    activeTab === tab.key
-                      ? "bg-foreground text-background shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${activeTab === tab.key
+                    ? "bg-foreground text-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   <tab.icon className="h-3.5 w-3.5" />
                   {tab.label}

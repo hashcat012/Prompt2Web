@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 
+export const runtime = "edge"
+export const dynamic = "force-dynamic"
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt, mode } = await req.json()
+
+    if (!process.env.DEEPSEEK_API_KEY) {
+      return NextResponse.json(
+        { error: "DeepSeek API key is not configured" },
+        { status: 500 }
+      )
+    }
 
     const systemPrompt =
       mode === "planning"
@@ -33,15 +43,22 @@ Do not include any explanation, just the code.`
           { role: "user", content: prompt },
         ],
         temperature: 0.7,
-        max_tokens: 8000,
+        max_tokens: 4000,
         stream: true,
       }),
     })
 
     if (!response.ok) {
       const errorText = await response.text()
+      let errorDetails = errorText
+      try {
+        const parsedError = JSON.parse(errorText)
+        errorDetails = parsedError.error?.message || errorText
+      } catch {
+        // use raw text
+      }
       return NextResponse.json(
-        { error: "DeepSeek API error", details: errorText },
+        { error: "DeepSeek API error", details: errorDetails },
         { status: response.status }
       )
     }
@@ -99,6 +116,7 @@ Do not include any explanation, just the code.`
       },
     })
   } catch (error) {
+    console.error("DeepSeek Route Error:", error)
     return NextResponse.json(
       { error: "Internal server error", details: String(error) },
       { status: 500 }
