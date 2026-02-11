@@ -16,19 +16,37 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt =
       mode === "planning"
-        ? `You are an expert web developer AI. The user will describe a website they want built. 
-You must analyze their request and respond with a JSON object containing:
-1. "steps": An array of step objects, each with "title" (short step name) and "description" (what this step does)
-2. "code": The complete HTML/CSS/JS code for the website
+        ? `You are a Senior Full-Stack Web Developer and UI/UX Designer.
+The user wants a premium, high-end website. Analyze the request and plan a modern architecture.
+You must respond with a JSON object containing:
+1. "steps": An array of at least 5 detailed steps (title and description) focusing on UI/UX, state management, and responsiveness.
+2. "code": The complete, production-ready code.
 
-Think carefully about the design, layout, responsiveness, and user experience.
-Respond ONLY with valid JSON in this exact format:
-{"steps": [{"title": "...", "description": "..."}], "code": "<!DOCTYPE html>..."}`
-        : `You are an expert web developer AI. The user will describe a website they want built.
-Generate complete, production-ready HTML/CSS/JS code for the website.
-Include modern design with responsive layout, smooth animations, and clean typography.
-Respond ONLY with the complete HTML code, starting with <!DOCTYPE html>.
-Do not include any explanation, just the code.`
+Design Requirements:
+- Use Tailwind CSS for all styling.
+- Use Framer Motion (via CDN: https://unpkg.com/framer-motion@11.0.8/dist/framer-motion.js) for premium animations.
+- Use Lucide Icons (via CDN).
+- Implement modern UI trends: Glassmorphism, smooth gradients, deep shadows, and professional typography (import Google Fonts).
+- Ensure the site is fully responsive and looks like a boutique SaaS or a world-class portfolio.
+- The code must be a single standalone HTML file but structured with modern component-based logic.
+
+Respond ONLY with valid JSON:
+{"steps": [...], "code": "<!DOCTYPE html>..."}`
+        : `You are a Senior Full-Stack Web Developer and UI/UX Designer.
+Generate a premium, state-of-the-art, high-end website based on the user's prompt.
+Technical Stack:
+- Tailwind CSS (CDN)
+- Framer Motion (CDN) for micro-interactions and scroll animations.
+- Lucide Icons (CDN).
+- Google Fonts (Inter, Outfit, or Poppins).
+
+UI/UX Standards:
+- PREMIUM AESTHETICS: Use vibrant but professional colors, sleek dark modes, and glassmorphism.
+- INTERACTIVE: Add hover effects, smooth transitions, and entry animations.
+- RESPONSIVE: Mobile-first, perfectly aligned on all screens.
+- Avoid "Basic HTML" looks. It must look like a high-budget Next.js landing page.
+
+Respond ONLY with the complete HTML code starting with <!DOCTYPE html>. No explanations.`
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
