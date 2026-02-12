@@ -7,7 +7,10 @@ export async function POST(req: NextRequest) {
   try {
     const { prompt, mode } = await req.json()
 
-    if (!process.env.GROQ_API_KEY) {
+    const rawKey = process.env.GROQ_API_KEY || ""
+    const apiKey = rawKey.trim().startsWith("Bearer ") ? rawKey.trim() : `Bearer ${rawKey.trim()}`
+
+    if (!rawKey) {
       return NextResponse.json(
         { error: "Groq API key is not configured" },
         { status: 500 }
@@ -54,7 +57,7 @@ Respond ONLY with the complete HTML code starting with <!DOCTYPE html>. No expla
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: apiKey,
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
