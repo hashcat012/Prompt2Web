@@ -45,7 +45,9 @@ export default function BuilderPage() {
   const [loading, setLoading] = useState(false)
   const [model, setModel] = useState<AIModel>("deepseek")
   const [mode, setMode] = useState<BuildMode>("fast")
-  const [generatedCode, setGeneratedCode] = useState("")
+  const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
+  const [activeFile, setActiveFile] = useState("index.html")
+
   const [activeTab, setActiveTab] = useState<"preview" | "code" | "files">("preview")
   const [copied, setCopied] = useState(false)
   const [planSteps, setPlanSteps] = useState<PlanStep[]>([])
@@ -70,7 +72,8 @@ export default function BuilderPage() {
     setInput("")
     setMessages((prev) => [...prev, { role: "user", content: userMessage }])
     setLoading(true)
-    setGeneratedCode("")
+    setGeneratedFiles({ "index.html": "" })
+    setActiveFile("index.html")
     setPlanSteps([])
 
     const apiUrl = model === "deepseek" ? "/api/ai/deepseek" : "/api/ai/groq"
@@ -132,59 +135,45 @@ export default function BuilderPage() {
               fullContent += parsed.content
 
               // Extract code from content dynamically
-              let codeContent = fullContent
+              // Extract code and files from content dynamically
               if (mode === "planning") {
                 try {
-                  // Try to find if we have a complete JSON yet
                   const jsonStart = fullContent.indexOf("{")
                   const jsonEnd = fullContent.lastIndexOf("}")
                   if (jsonStart !== -1 && jsonEnd !== -1) {
                     const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
                     const parsedJson = JSON.parse(jsonStr)
+
                     if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
-                      setPlanSteps((prev) => {
-                        const newSteps = parsedJson.steps.map(
-                          (s: { title: string; description: string }, idx: number) => ({
-                            title: s.title,
-                            description: s.description,
-                            status: idx < parsedJson.steps.length - 1 ? "complete" as const : "active" as const,
-                          })
-                        )
-                        newSteps.push({
-                          title: t.builder.complete,
-                          description: "Ready for preview!",
-                          status: "pending" as const,
-                        })
-                        return newSteps
-                      })
+                      setPlanSteps(parsedJson.steps.map((s: any, idx: number) => ({
+                        ...s,
+                        status: idx < parsedJson.steps.length - 1 ? "complete" : "active"
+                      })))
                     }
-                    if (parsedJson.code) {
-                      codeContent = parsedJson.code
+
+                    if (parsedJson.files) {
+                      setGeneratedFiles(parsedJson.files)
+                      if (parsedJson.indexFile) setActiveFile(parsedJson.indexFile)
+                    } else if (parsedJson.code) {
+                      setGeneratedFiles({ "index.html": parsedJson.code })
                     }
                   }
                 } catch {
-                  // Not yet valid JSON - extract HTML if available
-                  const htmlStart = fullContent.indexOf("<!DOCTYPE")
-                  if (htmlStart === -1) {
-                    const htmlStart2 = fullContent.indexOf("<html")
-                    if (htmlStart2 !== -1) codeContent = fullContent.slice(htmlStart2)
-                  } else {
-                    codeContent = fullContent.slice(htmlStart)
+                  // Partial JSON, try to extract whatever looks like HTML for preview
+                  const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
+                  if (htmlMatch) {
+                    setGeneratedFiles(prev => ({ ...prev, "index.html": htmlMatch[0] }))
                   }
                 }
               } else {
-                // Fast mode - extract HTML directly
-                const htmlStart = fullContent.indexOf("<!DOCTYPE")
-                if (htmlStart !== -1) {
-                  codeContent = fullContent.slice(htmlStart)
+                // Fast mode
+                const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
+                if (htmlMatch) {
+                  setGeneratedFiles({ "index.html": htmlMatch[0] })
                 } else {
-                  const htmlStart2 = fullContent.indexOf("<html")
-                  if (htmlStart2 !== -1) {
-                    codeContent = fullContent.slice(htmlStart2)
-                  }
+                  setGeneratedFiles({ "index.html": fullContent })
                 }
               }
-              setGeneratedCode(codeContent)
             }
           } catch {
             // skip unparseable fragments
@@ -216,17 +205,18 @@ export default function BuilderPage() {
   }
 
   const copyCode = () => {
-    navigator.clipboard.writeText(generatedCode)
+    navigator.clipboard.writeText(generatedFiles[activeFile] || "")
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const downloadCode = () => {
-    const blob = new Blob([generatedCode], { type: "text/html" })
+    const content = generatedFiles[activeFile] || ""
+    const blob = new Blob([content], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "index.html"
+    a.download = activeFile
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -317,9 +307,9 @@ export default function BuilderPage() {
                       : "bg-card border border-border"
                       }`}
                   >
-                    {msg.role === "assistant" && generatedCode ? (
+                    {msg.role === "assistant" && Object.values(generatedFiles).some(c => c.length > 0) ? (
                       <div className="flex flex-col gap-2">
-                        <p className="text-muted-foreground">Website generated successfully!</p>
+                        <p className="text-muted-foreground">Project generated successfully!</p>
                         {mode === "planning" && planSteps.length > 0 && (
                           <PlanningSteps steps={planSteps} />
                         )}
@@ -423,7 +413,7 @@ export default function BuilderPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              {generatedCode && (
+              {Object.keys(generatedFiles).some(k => generatedFiles[k].length > 0) && (
                 <>
                   <Button
                     variant="outline"
@@ -452,7 +442,6 @@ export default function BuilderPage() {
             </div>
           </div>
 
-          {/* Content */}
           <div className="flex-1 overflow-hidden">
             <AnimatePresence mode="wait">
               {activeTab === "preview" && (
@@ -464,7 +453,7 @@ export default function BuilderPage() {
                   transition={{ duration: 0.2 }}
                   className="h-full"
                 >
-                  {generatedCode ? (
+                  {Object.keys(generatedFiles).length > 0 && generatedFiles["index.html"] ? (
                     <div className="flex h-full flex-col">
                       <div className="flex items-center gap-2 border-b border-border bg-card/50 px-4 py-2">
                         <div className="flex gap-1.5">
@@ -484,7 +473,7 @@ export default function BuilderPage() {
                       </div>
                       <iframe
                         ref={iframeRef}
-                        srcDoc={generatedCode}
+                        srcDoc={generatedFiles["index.html"]}
                         className="flex-1 bg-white"
                         title="Preview"
                         sandbox="allow-scripts allow-same-origin"
@@ -513,10 +502,23 @@ export default function BuilderPage() {
                   transition={{ duration: 0.2 }}
                   className="h-full overflow-auto bg-card p-4"
                 >
-                  {generatedCode ? (
-                    <pre className="font-mono text-xs leading-relaxed text-foreground">
-                      <code>{generatedCode}</code>
-                    </pre>
+                  {Object.keys(generatedFiles).length > 0 ? (
+                    <div className="flex h-full flex-col gap-2">
+                      <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-muted/30 p-2">
+                        {Object.keys(generatedFiles).map(path => (
+                          <button
+                            key={path}
+                            onClick={() => setActiveFile(path)}
+                            className={`rounded px-2 py-1 text-[10px] whitespace-nowrap transition-colors ${activeFile === path ? "bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground"}`}
+                          >
+                            {path.split("/").pop()}
+                          </button>
+                        ))}
+                      </div>
+                      <pre className="flex-1 overflow-auto font-mono text-xs leading-relaxed text-foreground p-4">
+                        <code>{generatedFiles[activeFile]}</code>
+                      </pre>
+                    </div>
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center text-center">
                       <Code2 className="mb-4 h-8 w-8 text-muted-foreground" />
@@ -537,17 +539,26 @@ export default function BuilderPage() {
                   transition={{ duration: 0.2 }}
                   className="h-full p-4"
                 >
-                  {generatedCode ? (
+                  {Object.keys(generatedFiles).length > 0 ? (
                     <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/50">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">index.html</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(generatedCode.length / 1024).toFixed(1)} KB
-                          </p>
+                      {Object.keys(generatedFiles).map(path => (
+                        <div
+                          key={path}
+                          onClick={() => {
+                            setActiveFile(path)
+                            setActiveTab("code")
+                          }}
+                          className={`flex items-center gap-3 rounded-lg border border-border p-3 transition-colors cursor-pointer ${activeFile === path ? "bg-accent" : "bg-card hover:bg-accent/50"}`}
+                        >
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">{path}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(generatedFiles[path].length / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center text-center">
