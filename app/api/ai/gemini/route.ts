@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, mode } = await req.json()
+        const { prompt, mode, model } = await req.json()
 
         const rawKey = process.env.GEMINI_API_KEY || ""
         if (!rawKey) {
@@ -46,7 +46,8 @@ Ensure the design is elite (High-end SaaS look, dark mode, smooth transitions).
 
 Respond ONLY with valid JSON containing the "files" object.`
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:streamGenerateContent?key=${rawKey}`
+        const geminiModel = model === "gemini-flash" ? "gemini-2.0-flash" : "gemini-2.0-pro-exp-02-05"
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?key=${rawKey}`
 
         const response = await fetch(url, {
             method: "POST",

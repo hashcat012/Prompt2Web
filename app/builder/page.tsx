@@ -47,6 +47,7 @@ export default function BuilderPage() {
   const [mode, setMode] = useState<BuildMode>("fast")
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
   const [activeFile, setActiveFile] = useState("index.html")
+  const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
 
   const [activeTab, setActiveTab] = useState<"preview" | "code" | "files">("preview")
   const [copied, setCopied] = useState(false)
@@ -193,6 +194,14 @@ export default function BuilderPage() {
         ...prev,
         { role: "assistant", content: fullContent },
       ])
+
+      // Only update preview at the very end
+      setGeneratedFiles(prev => {
+        if (prev["index.html"]) {
+          setFinalPreviewHtml(prev["index.html"])
+        }
+        return prev
+      })
     } catch (err: any) {
       console.error("Builder Error:", err)
       setMessages((prev) => [
@@ -476,7 +485,7 @@ export default function BuilderPage() {
                       </div>
                       <iframe
                         ref={iframeRef}
-                        srcDoc={generatedFiles["index.html"]}
+                        srcDoc={finalPreviewHtml}
                         className="flex-1 bg-white"
                         title="Preview"
                         sandbox="allow-scripts allow-same-origin"

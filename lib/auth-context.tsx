@@ -33,7 +33,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   userData: null,
   loading: true,
-  signOut: async () => {},
+  signOut: async () => { },
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,22 +45,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
-        const userDocRef = doc(db, "users", firebaseUser.uid)
-        const userDoc = await getDoc(userDocRef)
-        if (userDoc.exists()) {
-          setUserData(userDoc.data() as UserData)
-        } else {
-          const newUserData: UserData = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            isAdmin: false,
-            plan: "free",
-            createdAt: new Date().toISOString(),
+        try {
+          const userDocRef = doc(db, "users", firebaseUser.uid)
+          const userDoc = await getDoc(userDocRef)
+
+          if (userDoc.exists()) {
+            setUserData(userDoc.data() as UserData)
+          } else {
+            console.log("Creating new user document in Firestore...")
+            const newUserData: UserData = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || "",
+              displayName: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
+              photoURL: firebaseUser.photoURL || "",
+              isAdmin: false,
+              plan: "free",
+              createdAt: new Date().toISOString(),
+            }
+            await setDoc(userDocRef, newUserData)
+            setUserData(newUserData)
+            console.log("User document created successfully.")
           }
-          await setDoc(userDocRef, newUserData)
-          setUserData(newUserData)
+        } catch (err) {
+          console.error("Firestore sync error:", err)
         }
       } else {
         setUserData(null)

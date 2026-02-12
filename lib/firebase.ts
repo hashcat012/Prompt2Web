@@ -9,7 +9,7 @@ import {
   onAuthStateChanged,
   type User,
 } from "firebase/auth"
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore"
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore"
 
 const firebaseConfig = {
   apiKey: "AIzaSyBbFmV1FabIZc-ZI-wTr4JvAoHd67nOyys",
@@ -38,5 +38,7 @@ export {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
+  deleteDoc,
   type User,
 }
