@@ -39,7 +39,7 @@ export default function PricingPage() {
     },
     {
       name: t.pricing.plus,
-      price: "$14",
+      price: "$1",
       originalPrice: "$15",
       period: t.pricing.month,
       description: "For serious builders",
@@ -62,8 +62,8 @@ export default function PricingPage() {
     },
     {
       name: t.pricing.pro,
-      price: "$39",
-      originalPrice: null,
+      price: "$9.99",
+      originalPrice: "$40",
       period: t.pricing.month,
       description: "For teams and enterprises",
       icon: Crown,
@@ -112,11 +112,10 @@ export default function PricingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
                 whileHover={{ y: -6, transition: { duration: 0.25 } }}
-                className={`relative flex flex-col rounded-2xl border bg-card p-8 transition-all duration-300 ${
-                  plan.popular
+                className={`relative flex flex-col rounded-2xl border bg-card p-8 transition-all duration-300 ${plan.popular
                     ? "border-foreground shadow-lg shadow-foreground/5 scale-[1.02]"
                     : "border-border hover:border-foreground/20"
-                }`}
+                  }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-4 py-1 text-xs font-semibold text-background">
@@ -161,9 +160,8 @@ export default function PricingPage() {
                         </div>
                       )}
                       <span
-                        className={`text-sm ${
-                          feature.included ? "text-foreground" : "text-muted-foreground"
-                        }`}
+                        className={`text-sm ${feature.included ? "text-foreground" : "text-muted-foreground"
+                          }`}
                       >
                         {feature.text}
                       </span>
@@ -173,11 +171,10 @@ export default function PricingPage() {
 
                 <Link href={plan.href}>
                   <Button
-                    className={`w-full transition-all duration-300 ${
-                      plan.popular
+                    className={`w-full transition-all duration-300 ${plan.popular
                         ? ""
                         : "bg-transparent"
-                    }`}
+                      }`}
                     variant={plan.popular ? "default" : "outline"}
                     size="lg"
                   >
