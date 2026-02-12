@@ -26,38 +26,33 @@ export async function POST(req: NextRequest) {
 
         const systemPrompt =
             mode === "planning"
-                ? `You are an elite full-stack product engineer, UI/UX designer, and frontend architect. 
-You do NOT generate single-file websites. You do NOT generate placeholder-only layouts.
-You ALWAYS build production-ready, multi-page, animated, component-based web applications.
+                ? `You are an elite full-stack engineer and UI/UX designer.
+You build production-ready, multi-file web applications.
 
-Design Philosophy:
-- Sites must resemble elite platforms like emergent.sh, lovable.dev, v0.dev.
-- Aesthetics: High-end SaaS look, dark mode, glassmorphism, fluid animations (Framer Motion).
+CRITICAL PREVIEW REQUIREMENT:
+- You must provide a master "index.html" in the "files" object.
+- This "index.html" MUST be a self-contained Web Container.
+- It must include all required CSS (Tailwind via CDN) and JS libraries (Framer Motion, Lucide via ESM).
+- It must render the entire application by importing/loading the other files you generate.
+- The preview depends ENTIRELY on this index.html being fully functional and styled.
+
+Project Structure:
+- Modular components in separate files.
+- Elite aesthetics: High-end SaaS look, dark mode, glassmorphism, fluid animations.
 
 Default Stack:
-- Next.js (App Router), Tailwind CSS, Framer Motion, Lucide Icons.
+- Next.js (App Router style), Tailwind CSS, Framer Motion, Lucide Icons.
 
-You must respond with a JSON object containing:
-1. "overview": A detailed markdown overview following this structure:
-   1️⃣ PROJECT OVERVIEW
-   2️⃣ ROUTES / PAGES
-   3️⃣ COMPONENT LIST
-   4️⃣ ANIMATION PLAN
-   5️⃣ FILE STRUCTURE
-2. "steps": An array of technical engineering steps.
-3. "files": A map where keys are file paths and values are code.
-4. "indexFile": Path to the main entry file (usually "index.html").
-
-Rules:
-- Modular components only. No single index.html.
-- "index.html" must be a container that loads the components for preview.
+JSON Output:
+1. "overview": Markdown summary (Project, Routes, Components, Animations, File Structure).
+2. "steps": Technical roadmap.
+3. "files": Map of file paths to FULL source code.
+4. "indexFile": "index.html".
 
 Respond ONLY with valid JSON.`
-                : `You are an elite full-stack engineer. 
-Build a production-ready, multi-file, animated web application using Next.js (simulated), Tailwind, and Framer Motion.
-Respond with a JSON object containing a "files" map.
-Ensure the design is elite (High-end SaaS look, dark mode, smooth transitions).
-Respond ONLY with valid JSON.`
+                : `You are an elite developer. Build a production-ready, multi-file web app.
+Ensure "index.html" is a master file that renders everything with Tailwind and animations.
+Respond ONLY with JSON containing the "files" map.`
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",

@@ -111,7 +111,7 @@ export function AISelector({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="liquid-glass w-64 max-h-[400px] overflow-y-auto">
           {models.map((m) => {
-            const isLocked = m.premium && !isPaid
+            const isLocked = false // Unlocked for testing as per user request
             return (
               <DropdownMenuItem
                 key={m.id}

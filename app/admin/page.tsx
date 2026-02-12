@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import { useAuth } from "@/lib/auth-context"
 import { useLocale } from "@/lib/locale-context"
 import { useRouter } from "next/navigation"
-import { db } from "@/lib/firebase"
+import { db, doc, updateDoc } from "@/lib/firebase"
 import { collection, getDocs } from "firebase/firestore"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Button } from "@/components/ui/button"
@@ -92,7 +92,6 @@ export default function AdminPage() {
 
   const handleUpdatePlan = async (uid: string, newPlan: string) => {
     try {
-      const { doc, updateDoc } = await import("firebase/firestore")
       await updateDoc(doc(db, "users", uid), { plan: newPlan })
       loadUsers() // Refresh list
     } catch (err) {
@@ -174,8 +173,8 @@ export default function AdminPage() {
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${activeTab === tab.key
-                    ? "bg-foreground text-background shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                  ? "bg-foreground text-background shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
                   }`}
               >
                 <tab.icon className="h-3.5 w-3.5" />
@@ -335,8 +334,8 @@ export default function AdminPage() {
                           <div className="flex items-center">
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${user.isAdmin
-                                  ? "bg-foreground text-background"
-                                  : "bg-muted text-muted-foreground"
+                                ? "bg-foreground text-background"
+                                : "bg-muted text-muted-foreground"
                                 }`}
                             >
                               {user.isAdmin ? "Admin" : "User"}
