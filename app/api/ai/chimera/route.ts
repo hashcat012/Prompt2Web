@@ -7,13 +7,19 @@ export async function POST(req: NextRequest) {
     try {
         const { prompt, mode, model } = await req.json()
 
-        // Key mapping: use CHIMERA_API_KEY for these specific models
-        const rawKey = process.env.CHIMERA_API_KEY || ""
+        // Key mapping based on model
+        let rawKey = ""
+        if (model === "openai/gpt-oss-120b:free" || model === "deepseek/deepseek-r1-0528:free") {
+            rawKey = process.env.OPENROUTER_API_KEY || ""
+        } else {
+            rawKey = process.env.CHIMERA_API_KEY || ""
+        }
+
         const apiKey = rawKey.trim().startsWith("Bearer ") ? rawKey.trim() : `Bearer ${rawKey.trim()}`
 
         if (!rawKey) {
             return NextResponse.json(
-                { error: "Chimera API key is not configured" },
+                { error: `API key for ${model} is not configured` },
                 { status: 500 }
             )
         }
