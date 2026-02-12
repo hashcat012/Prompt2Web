@@ -12,7 +12,6 @@ import {
 import { ChevronDown } from "lucide-react"
 
 export type AIModel =
-  | "deepseek"
   | "groq"
   | "gemini"
   | "gemini-flash"
@@ -51,6 +50,15 @@ function ModelLogo({ model, className }: { model: AIModel; className?: string })
       </svg>
     )
   }
+  if (model.includes("deepseek")) {
+    return (
+      <svg className={className} viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="6" fill="#0066FF" fillOpacity="0.1" />
+        <path d="M12 4C7.58 4 4 7.58 4 12s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1.5 12.5a4.5 4.5 0 0 0 0-9v1.5a3 3 0 0 1 0 6v1.5z" fill="#0066FF" />
+        <path d="M10.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" fill="#0066FF" />
+      </svg>
+    )
+  }
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
       <rect width="24" height="24" rx="6" fill="currentColor" fillOpacity="0.1" />
@@ -74,7 +82,6 @@ export function AISelector({
   const isPaid = userPlan !== "free"
 
   const models: { id: AIModel; name: string; desc: string; premium?: boolean }[] = [
-    { id: "deepseek", name: "DeepSeek R1", desc: "Advanced reasoning", premium: false },
     { id: "gemini", name: "Gemini 2.5 Pro", desc: "Google's strongest model", premium: true },
     { id: "gemini-flash", name: "Gemini 2.5 Flash", desc: "Fast & Efficient", premium: false },
     { id: "groq", name: "Groq (Llama 3.3)", desc: "Ultra-fast generation", premium: false },

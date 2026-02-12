@@ -43,13 +43,14 @@ export default function BuilderPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
-  const [model, setModel] = useState<AIModel>("deepseek")
+  const [model, setModel] = useState<AIModel>("gemini")
   const [mode, setMode] = useState<BuildMode>("fast")
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
   const [activeFile, setActiveFile] = useState("index.html")
   const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
+  const [projectOverview, setProjectOverview] = useState("")
 
-  const [activeTab, setActiveTab] = useState<"preview" | "code" | "files">("preview")
+  const [activeTab, setActiveTab] = useState<"preview" | "code" | "files" | "overview">("preview")
   const [copied, setCopied] = useState(false)
   const [planSteps, setPlanSteps] = useState<PlanStep[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -78,9 +79,8 @@ export default function BuilderPage() {
     setPlanSteps([])
 
     let apiUrl = "/api/ai/groq"
-    if (model === "deepseek") apiUrl = "/api/ai/deepseek"
-    else if (model === "gemini") apiUrl = "/api/ai/gemini"
-    else if (model.includes("/") || model.includes("free") || model.includes("chimera")) apiUrl = "/api/ai/chimera"
+    if (model === "gemini" || model === "gemini-flash") apiUrl = "/api/ai/gemini"
+    else if (model.includes("/") || model.includes("free") || model.includes("chimera") || model.includes("deepseek")) apiUrl = "/api/ai/chimera"
 
     try {
       const res = await fetch(apiUrl, {
@@ -147,6 +147,10 @@ export default function BuilderPage() {
                   if (jsonStart !== -1 && jsonEnd !== -1) {
                     const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
                     const parsedJson = JSON.parse(jsonStr)
+
+                    if (parsedJson.overview) {
+                      setProjectOverview(parsedJson.overview)
+                    }
 
                     if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
                       setPlanSteps(parsedJson.steps.map((s: any, idx: number) => ({
@@ -389,8 +393,8 @@ export default function BuilderPage() {
                 )}
               </Button>
             </div>
-            <p className="mt-2 text-center text-[10px] text-muted-foreground">
-              {model === "deepseek" ? "DeepSeek" : "Groq"} / {mode === "fast" ? t.builder.fast : t.builder.planning} mode
+            <p className="mt-2 text-center text-[10px] text-muted-foreground uppercase tracking-widest">
+              {model.split("/").pop()?.split(":")[0] || model} | {mode === "fast" ? t.builder.fast : t.builder.planning}
             </p>
           </div>
         </motion.div>
@@ -409,7 +413,8 @@ export default function BuilderPage() {
                 { key: "preview" as const, icon: Eye, label: t.builder.preview },
                 { key: "code" as const, icon: Code2, label: t.builder.code },
                 { key: "files" as const, icon: FileText, label: t.builder.files },
-              ].map((tab) => (
+                { key: "overview" as const, icon: Sparkles, label: "Elite Plan" },
+              ].filter(t => t.key !== "overview" || projectOverview).map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}

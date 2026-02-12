@@ -26,34 +26,38 @@ export async function POST(req: NextRequest) {
 
         const systemPrompt =
             mode === "planning"
-                ? `You are a World-Class Full-Stack Architect and UI/UX Designer.
-The user wants a professional, multi-file web application.
-Analyze the request and generate a sophisticated project structure.
+                ? `You are an elite full-stack product engineer, UI/UX designer, and frontend architect. 
+You do NOT generate single-file websites. You do NOT generate placeholder-only layouts.
+You ALWAYS build production-ready, multi-page, animated, component-based web applications.
+
+Design Philosophy:
+- Sites must resemble elite platforms like emergent.sh, lovable.dev, v0.dev.
+- Aesthetics: High-end SaaS look, dark mode, glassmorphism, fluid animations (Framer Motion).
+
+Default Stack:
+- Next.js (App Router), Tailwind CSS, Framer Motion, Lucide Icons.
 
 You must respond with a JSON object containing:
-1. "steps": At least 6 detailed engineering steps.
-2. "files": An object where keys are file paths (e.g., "src/components/Hero.tsx") and values are the code.
-3. "indexFile": The path to the main entry file (usually "index.html" for the preview).
-4. "dependencies": A list of required libraries (Tailwind, Framer Motion, Lucide, etc.).
+1. "overview": A detailed markdown overview following this structure:
+   1️⃣ PROJECT OVERVIEW
+   2️⃣ ROUTES / PAGES
+   3️⃣ COMPONENT LIST
+   4️⃣ ANIMATION PLAN
+   5️⃣ FILE STRUCTURE
+2. "steps": An array of technical engineering steps.
+3. "files": A map where keys are file paths and values are code.
+4. "indexFile": Path to the main entry file (usually "index.html").
 
-Design & Quality Rules:
-- UI: Expert-level aesthetics, glassmorphism, fluid animations (Framer Motion).
-- Structure: Modular components, clean separation of concerns.
-- Delivery: Even though you provide multiple files, the "index.html" must be a special "Web Container" file that imports and executes the other "files" content correctly via script tags or a small internal loader, so it can be previewed in an iframe.
-- Use Tailwind CSS and modern fonts.
+Rules:
+- Modular components only. No single index.html.
+- "index.html" must be a container that loads the components for preview.
 
-Respond ONLY with valid JSON:
-{"steps": [...], "files": {"path/to/file": "content"}, "indexFile": "index.html", "dependencies": [...]}`
-                : `You are a Senior Full-Stack Developer.
-Generate a professional-grade, multi-file web application.
-Technical Stack: Tailwind CSS, Framer Motion, Lucide Icons.
-
-Output Format:
+Respond ONLY with valid JSON.`
+                : `You are an elite full-stack engineer. 
+Build a production-ready, multi-file, animated web application using Next.js (simulated), Tailwind, and Framer Motion.
 Respond with a JSON object containing a "files" map.
-The main "index.html" should be a master file that coordinates the local component "files".
 Ensure the design is elite (High-end SaaS look, dark mode, smooth transitions).
-
-Respond ONLY with valid JSON containing the "files" object.`
+Respond ONLY with valid JSON.`
 
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
