@@ -76,13 +76,16 @@ export default function BuilderPage() {
     setActiveFile("index.html")
     setPlanSteps([])
 
-    const apiUrl = model === "deepseek" ? "/api/ai/deepseek" : "/api/ai/groq"
+    let apiUrl = "/api/ai/groq"
+    if (model === "deepseek") apiUrl = "/api/ai/deepseek"
+    else if (model === "gemini") apiUrl = "/api/ai/gemini"
+    else if (model.includes("/") || model.includes("free") || model.includes("chimera")) apiUrl = "/api/ai/chimera"
 
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userMessage, mode }),
+        body: JSON.stringify({ prompt: userMessage, mode, model }),
       })
 
       if (!res.ok) {
