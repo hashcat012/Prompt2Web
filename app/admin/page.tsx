@@ -90,6 +90,16 @@ export default function AdminPage() {
     }
   }
 
+  const handleUpdatePlan = async (uid: string, newPlan: string) => {
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore")
+      await updateDoc(doc(db, "users", uid), { plan: newPlan })
+      loadUsers() // Refresh list
+    } catch (err) {
+      console.error("Error updating plan:", err)
+    }
+  }
+
   const handleSaveSettings = async () => {
     setSaving(true)
     // In production, save these to Firestore admin settings
@@ -163,11 +173,10 @@ export default function AdminPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                  activeTab === tab.key
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${activeTab === tab.key
                     ? "bg-foreground text-background shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 <tab.icon className="h-3.5 w-3.5" />
                 {tab.label}
@@ -325,11 +334,10 @@ export default function AdminPage() {
                           </div>
                           <div className="flex items-center">
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                                user.isAdmin
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${user.isAdmin
                                   ? "bg-foreground text-background"
                                   : "bg-muted text-muted-foreground"
-                              }`}
+                                }`}
                             >
                               {user.isAdmin ? "Admin" : "User"}
                             </span>
@@ -356,9 +364,23 @@ export default function AdminPage() {
                                   <Eye className="h-3.5 w-3.5" />
                                   View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="cursor-pointer gap-2">
-                                  <Key className="h-3.5 w-3.5" />
-                                  Change Role
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2"
+                                  onClick={() => handleUpdatePlan(user.uid, "free")}
+                                >
+                                  Set Free Plan
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2"
+                                  onClick={() => handleUpdatePlan(user.uid, "plus")}
+                                >
+                                  Set Plus Plan
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2"
+                                  onClick={() => handleUpdatePlan(user.uid, "pro")}
+                                >
+                                  Set Pro Plan
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="cursor-pointer gap-2 text-destructive">
                                   <Ban className="h-3.5 w-3.5" />
