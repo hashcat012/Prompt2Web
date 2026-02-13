@@ -1,14 +1,10 @@
 "use client"
 
-import React from "react"
-
-import { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useLocale } from "@/lib/locale-context"
 import { useAuth } from "@/lib/auth-context"
 import { AppSidebar } from "@/components/app-sidebar"
-import { AISelector, type AIModel, type BuildMode } from "@/components/builder/ai-selector"
-import { PlanningSteps } from "@/components/builder/planning-steps"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
@@ -24,15 +20,13 @@ import {
   RefreshCw,
   Sparkles,
   ExternalLink,
+  ChevronRight,
+  FolderOpen
 } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import Editor from "@monaco-editor/react"
-
-interface Message {
-  role: "user" | "assistant"
-  content: string
-}
+import { toast } from "sonner"
 
 interface PlanStep {
   title: string
@@ -42,40 +36,36 @@ interface PlanStep {
 
 export default function BuilderPage() {
   const { t } = useLocale()
-  const { user, userData } = useAuth() // Need user for saving history
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [loading, setLoading] = useState(false)
-  // const [model, setModel] = useState<AIModel>("groq") // Managed internally now
-  const mode = "planning" // Enforce single planning mode
-  const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
-  const [activeFile, setActiveFile] = useState("index.html")
-  const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
+  const { user } = useAuth()
+
+  const [prompt, setPrompt] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [activeTab, setActiveTab] = useState<"preview" | "code" | "plan">("plan")
+  const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({})
+  const [activeFile, setActiveFile] = useState<string>("index.html")
   const [projectOverview, setProjectOverview] = useState("")
-
-  const [activeTab, setActiveTab] = useState<"preview" | "code" | "files" | "overview">("preview")
+  const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
   const [copied, setCopied] = useState(false)
-  const [planSteps, setPlanSteps] = useState<PlanStep[]>([])
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const [planSteps, setPlanSteps] = useState<PlanStep[]>([
+    { title: "Analyzing Request", description: "Breaking down UI, logic, and architecture (GPT OSS 120B)", status: "pending" },
+    { title: "Understanding Requirements", description: "Mapping needs to interactive components (GLM 4.5 AI)", status: "pending" },
+    { title: "Planning Architecture", description: "Defining folder structure and tech stack (GPT OSS 120B)", status: "pending" },
+    { title: "Designing UI Structure", description: "Creating wireframes and choosing styles (GLM 4.5 AI)", status: "pending" },
+    { title: "Building Components", description: "Coding modular JS/CSS files (Deepseek R1)", status: "pending" },
+    { title: "Generating Production Code", description: "Full assembly and logic integration (Deepseek + Groq)", status: "pending" },
+    { title: "Optimizing & Refinement", description: "Debugging and performance tweaks (Deepseek R1)", status: "pending" },
+    { title: "Adding Responsiveness", description: "Final media queries and smooth animations (GLM + Deepseek)", status: "pending" },
+  ])
+
   const iframeRef = useRef<HTMLIFrameElement>(null)
-
-  const userPlan = userData?.plan || "free"
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
 
   const saveProjectToHistory = async (overview: string, files: Record<string, string>) => {
     if (!user) return
     try {
       await addDoc(collection(db, "projects"), {
         userId: user.uid,
-        prompt: messages[messages.length - 1]?.content || "New Project",
+        prompt: prompt,
         overview: overview,
         files: files,
         createdAt: serverTimestamp(),
@@ -86,629 +76,403 @@ export default function BuilderPage() {
     }
   }
 
-  const handleSubmit = async () => {
-    if (!input.trim() || loading) return
+  const updateStep = (index: number, status: "pending" | "active" | "complete") => {
+    setPlanSteps(prev => {
+      const next = [...prev]
+      if (next[index]) {
+        next[index] = { ...next[index], status }
+      }
+      return next
+    })
+  }
 
-    const userMessage = input.trim()
-    setInput("")
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }])
-    setLoading(true)
-    setGeneratedFiles({ "index.html": "" })
-    setActiveFile("index.html")
-    setPlanSteps([])
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!prompt.trim() || isGenerating) return
 
-    // Always use chimera/openrouter for consistent planning behavior unless using groq specifically requested by user.
-    // Actually, "Groq Llama 3.3" is in the model list but we are in Auto-Pilot.
-    // We will route everything to Chimera (OpenRouter) and let it decide or default to the best model.
-    // For now we default to the best available free model on OpenRouter via the chimera route "openai/gpt-oss-120b:free".
-    const apiUrl = "/api/ai/chimera"
+    setIsGenerating(true)
+    setActiveTab("plan")
+    setGeneratedFiles({})
+    setFinalPreviewHtml("")
+    setProjectOverview("")
+
+    // Reset steps
+    setPlanSteps(prev => prev.map(s => ({ ...s, status: "pending" })))
 
     try {
-      const res = await fetch(apiUrl, {
+      updateStep(0, "active")
+
+      const response = await fetch("/api/ai/chimera", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userMessage, mode, model: "auto" }),
+        body: JSON.stringify({
+          prompt,
+          model: "auto",
+          stream: true
+        }),
       })
 
-      if (!res.ok) {
-        let errorMessage = "API request failed"
-        try {
-          // Platform Steps based on the "Advanced Agentic Development Platform" persona
-          const [planSteps, setPlanSteps] = useState<PlanStep[]>([
-            { title: "Analyzing Request", description: "Breaking down UI, logic, and architecture (GPT OSS 120B)", status: "pending" },
-            { title: "Understanding Requirements", description: "Mapping needs to interactive components (GLM 4.5 AI)", status: "pending" },
-            { title: "Planning Architecture", description: "Defining folder structure and tech stack (GPT OSS 120B)", status: "pending" },
-            { title: "Designing UI Structure", description: "Creating wireframes and choosing styles (GLM 4.5 AI)", status: "pending" },
-            { title: "Building Components", description: "Coding modular .tsx/.js files (Deepseek R1)", status: "pending" },
-            { title: "Generating Production Code", description: "Full assembly and logic integration (Deepseek + Groq)", status: "pending" },
-            { title: "Optimizing & Refinement", description: "Debugging and performance tweaks (Deepseek R1)", status: "pending" },
-            { title: "Adding Responsiveness", description: "Final media queries and smooth animations (GLM + Deepseek)", status: "pending" },
-          ])
+      if (!response.ok) throw new Error("API request failed")
 
-          const [prompt, setPrompt] = useState("")
-          const [isGenerating, setIsGenerating] = useState(false)
-          const [activeTab, setActiveTab] = useState<"preview" | "code" | "plan">("plan")
-          const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({})
-          const [activeFile, setActiveFile] = useState<string>("index.html")
-          const [projectOverview, setProjectOverview] = useState("")
-          const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ""
+      let currentStepIndex = 0
 
-          const handleSubmit = async (e: React.FormEvent) => {
-            e.preventDefault()
-            if (!prompt.trim() || isGenerating) return
-
-            setIsGenerating(true)
-            setActiveTab("plan")
-            setGeneratedFiles({})
-            setFinalPreviewHtml("")
-
-            // Reset steps to pending
-            setPlanSteps(prev => prev.map(s => ({ ...s, status: "pending" })))
-
-            try {
-              // Step-by-step simulation for realism as requested
-              const updateStep = (index: number, status: "loading" | "complete") => {
-                setPlanSteps(prev => {
-                  const next = [...prev]
-                  next[index] = { ...next[index], status }
-                  return next
-                })
-              }
-
-              // Start the progressive flow
-              updateStep(0, "loading")
-
-              const response = await fetch("/api/ai/chimera", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  prompt,
-                  model: "auto", // Backend handles the high-level orchestration
-                  stream: true
-                }),
-              })
-
-              if (!response.ok) throw new Error("API hatası")
-
-              const reader = response.body?.getReader()
-              const decoder = new TextDecoder()
-              let fullContent = ""
-
-              // We simulate the progress while waiting for the stream
-              // Let's divide the progress over the stream duration
-              let currentStepIndex = 0
-              const stepInterval = setInterval(() => {
-                if (currentStepIndex < 5) { // First 5 steps are "pre-generation/planning"
-                  updateStep(currentStepIndex, "complete")
-                  currentStepIndex++
-                  updateStep(currentStepIndex, "loading")
-                } else {
-                  clearInterval(stepInterval)
-                }
-              }, 3000)
-
-              while (true) {
-                const { done, value } = await reader!.read()
-                if (done) break
-                const chunk = decoder.decode(value)
-                fullContent += chunk
-              }
-
-              clearInterval(stepInterval)
-
-              // Complete remaining steps after data is received
-              for (let i = currentStepIndex; i < planSteps.length; i++) {
-                updateStep(i, "loading")
-                await new Promise(r => setTimeout(r, 1000))
-                updateStep(i, "complete")
-              }
-              const errorData = await res.json()
-              errorMessage = errorData.details || errorData.error || errorMessage
-            } catch {
-              // fallback to default
-            }
-            throw new Error(errorMessage)
-          }
-
-          const reader = res.body?.getReader()
-          if (!reader) throw new Error("Failed to initialize stream reader")
-
-          let fullContent = ""
-          const decoder = new TextDecoder()
-          let streamBuffer = ""
-
-          if (true) { // All modes are planning now
-            // For planning mode, show initial steps
-            const initialSteps: PlanStep[] = [
-              { title: t.builder.analyzing, description: "Understanding your requirements...", status: "active" },
-              { title: "Planning architecture", description: "Designing component structure...", status: "pending" },
-              { title: t.builder.building, description: "Generating production code...", status: "pending" },
-              { title: "Optimizing", description: "Adding responsive design & animations...", status: "pending" },
-              { title: t.builder.complete, description: "Ready for preview!", status: "pending" },
-            ]
-            setPlanSteps(initialSteps)
-          }
-
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            streamBuffer += decoder.decode(value, { stream: true })
-            const lines = streamBuffer.split("\n")
-            streamBuffer = lines.pop() || ""
-
-            for (const line of lines) {
-              const trimmed = line.trim()
-              if (!trimmed || !trimmed.startsWith("data: ")) continue
-              const data = trimmed.slice(6)
-              if (data === "[DONE]") continue
-
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.content) {
-                  fullContent += parsed.content
-                  // Improved JSON parsing logic inside stream
-                  // We try to parse continuously to show progress if possible, but mainly relying on final parse
-                }
-              } catch {
-                // skip unparseable
-              }
-            }
-          }
-
-          // Final JSON extraction attempt after stream completes
-          try {
-            // Strip out markdown code blocks if present
-            let cleanContent = fullContent
-            if (cleanContent.includes("```json")) {
-              cleanContent = cleanContent.split("```json")[1].split("```")[0]
-            } else if (cleanContent.includes("```")) {
-              // Try to find the block usually at the end
-              const parts = cleanContent.split("```")
-              if (parts.length >= 3) {
-                cleanContent = parts[1] // Take the middle part
-              }
-            }
-
-            // Find JSON start/end just in case
-            const jsonStart = cleanContent.indexOf("{")
-            const jsonEnd = cleanContent.lastIndexOf("}")
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-              cleanContent = cleanContent.substring(jsonStart, jsonEnd + 1)
-              const parsedJson = JSON.parse(cleanContent)
-
-              if (parsedJson.overview) setProjectOverview(parsedJson.overview)
-              if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
-                setPlanSteps(parsedJson.steps.map((s: any) => ({ ...s, status: "complete" as const })))
-              } else {
-                setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
-              }
-
-              if (parsedJson.files) {
-                setGeneratedFiles(parsedJson.files)
-                if (parsedJson.indexFile) setActiveFile(parsedJson.indexFile)
-                if (parsedJson.files["index.html"]) setFinalPreviewHtml(parsedJson.files["index.html"])
-
-                // Save to history
-                saveProjectToHistory(parsedJson.overview || "No overview", parsedJson.files)
-              } else if (parsedJson.code) {
-                // Fallback for single file
-                setGeneratedFiles({ "index.html": parsedJson.code })
-                setFinalPreviewHtml(parsedJson.code)
-              }
-            } else {
-              // Fallback: try regex for HTML
-              const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
-              if (htmlMatch) {
-                setGeneratedFiles({ "index.html": htmlMatch[0] })
-                setFinalPreviewHtml(htmlMatch[0])
-                setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
-              }
-            }
-          } catch (e) {
-            console.error("JSON Parse Error:", e)
-          }
-
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: fullContent },
-          ])
-
-        } catch (err: any) {
-          console.error("Builder Error:", err)
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: `❌ [V2] Hata: ${err.message || "Bilinmeyen bir hata oluştu. Lütfen Vercel Logs panelini kontrol edin."}`
-            },
-          ])
-        } finally {
-          setLoading(false)
+      // Realistic progress simulation
+      const stepInterval = setInterval(() => {
+        if (currentStepIndex < 5) {
+          updateStep(currentStepIndex, "complete")
+          currentStepIndex++
+          updateStep(currentStepIndex, "active")
+        } else {
+          clearInterval(stepInterval)
         }
+      }, 4000)
+
+      while (true) {
+        const { done, value } = await reader!.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        fullContent += chunk
       }
 
-      const copyCode = () => {
-        navigator.clipboard.writeText(generatedFiles[activeFile] || "")
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
+      clearInterval(stepInterval)
 
-      const downloadCode = () => {
-        const content = generatedFiles[activeFile] || ""
-        const blob = new Blob([content], { type: "text/plain" })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = activeFile
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-
-      const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault()
-          handleSubmit()
+      // Process complete content
+      try {
+        let cleanContent = fullContent
+        if (cleanContent.includes("```json")) {
+          cleanContent = cleanContent.split("```json")[1].split("```")[0]
+        } else if (cleanContent.includes("```")) {
+          const parts = cleanContent.split("```")
+          if (parts.length >= 3) cleanContent = parts[1]
         }
+
+        const jsonStart = cleanContent.indexOf("{")
+        const jsonEnd = cleanContent.lastIndexOf("}")
+
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const parsedJson = JSON.parse(cleanContent.substring(jsonStart, jsonEnd + 1))
+
+          if (parsedJson.overview) setProjectOverview(parsedJson.overview)
+          if (parsedJson.files) {
+            setGeneratedFiles(parsedJson.files)
+            const indexKey = Object.keys(parsedJson.files).find(f => f.endsWith("index.html")) || "index.html"
+            setActiveFile(indexKey)
+
+            // BUNDLER LOGIC: Inject files into index.html for the preview
+            let bundledHtml = parsedJson.files[indexKey] || ""
+
+            // Inject CSS files
+            Object.keys(parsedJson.files).forEach(path => {
+              if (path.endsWith(".css")) {
+                const cssContent = parsedJson.files[path]
+                // Escape paths for regex
+                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const linkRegex = new RegExp(`<link[^>]*href=["']${escapedPath}["'][^>]*>`, 'gi')
+                bundledHtml = bundledHtml.replace(linkRegex, `<style>${cssContent}</style>`)
+              }
+            })
+
+            // Inject JS files
+            Object.keys(parsedJson.files).forEach(path => {
+              if (path.endsWith(".js") || path.endsWith(".ts") || path.endsWith(".tsx")) {
+                const jsContent = parsedJson.files[path]
+                const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                const scriptRegex = new RegExp(`<script[^>]*src=["']${escapedPath}["'][^>]*>\\s*</script>`, 'gi')
+                // Simple bundling: replace script tag with inline script
+                bundledHtml = bundledHtml.replace(scriptRegex, `<script type="module">${jsContent}</script>`)
+              }
+            })
+
+            setFinalPreviewHtml(bundledHtml)
+
+            // Save to user history
+            saveProjectToHistory(parsedJson.overview || "Generated Project", parsedJson.files)
+          }
+        }
+      } catch (e) {
+        console.error("Parse Error:", e)
+        toast.error("Failed to parse AI output, but check the code tab.")
       }
 
-      return (
-        <div className="flex h-screen overflow-hidden bg-background">
-          <AppSidebar />
+      // Complete remaining steps
+      for (let i = currentStepIndex; i < planSteps.length; i++) {
+        updateStep(i, "active")
+        await new Promise(r => setTimeout(r, 800))
+        updateStep(i, "complete")
+      }
 
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left Panel - Chat */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4 }}
-              className="flex w-full flex-col border-r border-border md:w-[420px] lg:w-[480px]"
-            >
-              {/* Chat header */}
-              <div className="flex h-14 items-center justify-between border-b border-border px-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  <span className="text-sm font-semibold">AI Builder</span>
-                </div>
-                <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 shadow-sm">
-                  <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                  <span className="text-xs font-medium">Auto-Pilot Active</span>
-                </div>
-              </div>
-
-              {/* Messages */}
-              <ScrollArea className="flex-1">
-                <div className="flex flex-col gap-4 p-4">
-                  {messages.length === 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex flex-col items-center justify-center py-20 text-center"
-                    >
-                      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground/5">
-                        <Sparkles className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-lg font-semibold">
-                        {t.builder.placeholder.split("...")[0]}
-                      </h3>
-                      <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-                        Choose your AI model and mode, then describe what you want to build.
-                      </p>
-                      <div className="mt-6 grid grid-cols-2 gap-2">
-                        {[
-                          "Landing page for a SaaS",
-                          "Portfolio website",
-                          "Restaurant website",
-                          "Blog template",
-                        ].map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            onClick={() => setInput(suggestion)}
-                            className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground transition-all duration-200 hover:border-foreground/20 hover:bg-accent hover:text-foreground"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {messages.map((msg, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === "user"
-                          ? "bg-foreground text-background"
-                          : "bg-card border border-border"
-                          }`}
-                      >
-                        {msg.role === "assistant" && Object.values(generatedFiles).some(c => c.length > 0) ? (
-                          <div className="flex flex-col gap-2">
-                            <p className="text-muted-foreground">Project generated successfully!</p>
-                            {planSteps.length > 0 && (
-                              <PlanningSteps steps={planSteps} />
-                            )}
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-
-                  {loading && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex justify-start"
-                    >
-                      <div className="rounded-2xl border border-border bg-card px-4 py-3">
-                        {planSteps.length > 0 ? (
-                          <PlanningSteps steps={planSteps} />
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm text-muted-foreground">
-                              {t.builder.generating}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
-              </ScrollArea>
-
-              {/* Input */}
-              <div className="border-t border-border p-4">
-                <div className="flex items-end gap-2 rounded-xl border border-border bg-card p-2 transition-all duration-200 focus-within:border-foreground/20 focus-within:ring-1 focus-within:ring-ring">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder={t.builder.placeholder}
-                    rows={1}
-                    className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
-                    style={{ height: "40px" }}
-                    onInput={(e) => {
-                      const target = e.target as HTMLTextAreaElement
-                      target.style.height = "40px"
-                      target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-                    }}
-                  />
-                  <Button
-                    size="icon"
-                    className="h-9 w-9 shrink-0 rounded-lg transition-all duration-200"
-                    onClick={handleSubmit}
-                    disabled={!input.trim() || loading}
-                  >
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="mt-2 text-center text-[10px] text-muted-foreground uppercase tracking-widest">
-                  Automatic Model Selection
-                </p>
-              </div>
-            </motion.div>
-
-            {/* Right Panel - Preview/Code/Files */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.1 }}
-              className="hidden flex-1 flex-col md:flex"
-            >
-              {/* Tabs */}
-              <div className="flex h-14 items-center justify-between border-b border-border px-4">
-                <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-0.5">
-                  {[
-                    { key: "preview" as const, icon: Eye, label: t.builder.preview },
-                    { key: "code" as const, icon: Code2, label: t.builder.code },
-                    { key: "files" as const, icon: FileText, label: t.builder.files },
-                    { key: "overview" as const, icon: Sparkles, label: "Elite Plan" },
-                  ].filter(t => t.key !== "overview" || projectOverview).map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveTab(tab.key)}
-                      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${activeTab === tab.key
-                        ? "bg-foreground text-background shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                      <tab.icon className="h-3.5 w-3.5" />
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {Object.keys(generatedFiles).some(k => generatedFiles[k].length > 0) && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 bg-transparent text-xs"
-                        onClick={copyCode}
-                      >
-                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        {copied ? "Copied" : "Copy"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5 bg-transparent text-xs"
-                        onClick={downloadCode}
-                      >
-                        <Download className="h-3 w-3" />
-                        Download
-                      </Button>
-                      <Button size="sm" className="gap-1.5 text-xs">
-                        <Rocket className="h-3 w-3" />
-                        {t.builder.deploy}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  {activeTab === "preview" && (
-                    <motion.div
-                      key="preview"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="h-full"
-                    >
-                      {Object.keys(generatedFiles).length > 0 && generatedFiles["index.html"] ? (
-                        <div className="flex h-full flex-col">
-                          <div className="flex items-center gap-2 border-b border-border bg-card/50 px-4 py-2">
-                            <div className="flex gap-1.5">
-                              <div className="h-2.5 w-2.5 rounded-full bg-destructive/50" />
-                              <div className="h-2.5 w-2.5 rounded-full bg-chart-4/50" />
-                              <div className="h-2.5 w-2.5 rounded-full bg-chart-2/50" />
-                            </div>
-                            <div className="flex-1 rounded-md bg-muted px-3 py-1 text-[11px] text-muted-foreground">
-                              localhost:3000
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <RefreshCw className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <iframe
-                            ref={iframeRef}
-                            srcDoc={finalPreviewHtml}
-                            className="flex-1 bg-white"
-                            title="Preview"
-                            sandbox="allow-scripts allow-same-origin"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex h-full flex-col items-center justify-center text-center">
-                          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
-                            <Eye className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                          <h3 className="text-lg font-semibold">Preview</h3>
-                          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                            Your generated website will appear here. Start by describing what you want to build.
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {activeTab === "code" && (
-                    <motion.div
-                      key="code"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="h-full bg-card" // Removed p-4 for editor
-                    >
-                      {Object.keys(generatedFiles).length > 0 ? (
-                        <div className="flex h-full flex-col gap-2">
-                          <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-muted/30 p-2">
-                            {Object.keys(generatedFiles).map(path => (
-                              <button
-                                key={path}
-                                onClick={() => setActiveFile(path)}
-                                className={`rounded px-2 py-1 text-[10px] whitespace-nowrap transition-colors ${activeFile === path ? "bg-foreground text-background" : "bg-card text-muted-foreground hover:text-foreground"}`}
-                              >
-                                {path.split("/").pop()}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="flex-1 overflow-hidden">
-                            <Editor
-                              height="100%"
-                              defaultLanguage="javascript"
-                              language={activeFile.endsWith(".html") ? "html" : activeFile.endsWith(".css") ? "css" : "javascript"}
-                              value={generatedFiles[activeFile]}
-                              theme="vs-dark" // We can try to match the app theme, but vs-dark is safe
-                              options={{
-                                minimap: { enabled: false },
-                                fontSize: 13,
-                                readOnly: true,
-                                scrollBeyondLastLine: false,
-                                automaticLayout: true,
-                                wordWrap: "on"
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex h-full flex-col items-center justify-center text-center p-4">
-                          <Code2 className="mb-4 h-8 w-8 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
-                            Generated code will appear here
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {activeTab === "files" && (
-                    <motion.div
-                      key="files"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="h-full p-4"
-                    >
-                      {Object.keys(generatedFiles).length > 0 ? (
-                        <div className="flex flex-col gap-2">
-                          {Object.keys(generatedFiles).map(path => (
-                            <div
-                              key={path}
-                              onClick={() => {
-                                setActiveFile(path)
-                                setActiveTab("code")
-                              }}
-                              className={`flex items-center gap-3 rounded-lg border border-border p-3 transition-colors cursor-pointer ${activeFile === path ? "bg-accent" : "bg-card hover:bg-accent/50"}`}
-                            >
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm font-medium">{path}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {(generatedFiles[path].length / 1024).toFixed(1)} KB
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex h-full flex-col items-center justify-center text-center">
-                          <FileText className="mb-4 h-8 w-8 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">
-                            Generated files will appear here
-                          </p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )
+      setActiveTab("preview")
+    } catch (error) {
+      console.error(error)
+      toast.error("An error occurred during generation.")
+    } finally {
+      setIsGenerating(false)
     }
+  }
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(generatedFiles[activeFile] || "")
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    toast.success("Code copied to clipboard")
+  }
+
+  const downloadProject = () => {
+    // Basic download logic could be added here
+    toast.info("Download feature coming soon!")
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      <AppSidebar />
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Header */}
+        <header className="flex h-14 items-center justify-between border-b border-border bg-card/50 backdrop-blur-md px-6 z-20">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+              <Sparkles className="h-3 w-3" />
+              <span>Auto-Pilot Mode</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-border bg-muted/50 p-1">
+              <button
+                onClick={() => setActiveTab("plan")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${activeTab === "plan" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                Plan
+              </button>
+              <button
+                onClick={() => setActiveTab("code")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${activeTab === "code" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Code2 className="h-3.5 w-3.5" />
+                Code
+              </button>
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${activeTab === "preview" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            </div>
+
+            <Button variant="outline" size="sm" className="h-8 gap-2" onClick={downloadProject}>
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden relative">
+          <AnimatePresence mode="wait">
+            {activeTab === "plan" && (
+              <motion.div
+                key="plan"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="h-full overflow-auto p-6 md:p-10"
+              >
+                <div className="mx-auto max-w-3xl">
+                  {projectOverview && (
+                    <div className="mb-10 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                      <h2 className="text-xl font-bold mb-4">Project Overview</h2>
+                      <div className="prose prose-sm prose-invert max-w-none text-muted-foreground">
+                        {projectOverview}
+                      </div>
+                    </div>
+                  )}
+
+                  <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
+                    <Rocket className="h-5 w-5 text-primary" />
+                    Execution Roadmap
+                  </h2>
+                  <div className="space-y-4">
+                    {planSteps.map((step, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        className={`group relative flex items-start gap-4 rounded-xl border p-4 transition-all ${step.status === "active" ? "border-primary/50 bg-primary/5 shadow-md scale-[1.02]" : "border-border bg-card"}`}
+                      >
+                        <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center">
+                          {step.status === "complete" ? (
+                            <div className="rounded-full bg-green-500/20 p-1 text-green-500">
+                              <Check className="h-3.5 w-3.5" />
+                            </div>
+                          ) : step.status === "active" ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          ) : (
+                            <div className="h-2 w-2 rounded-full bg-muted-foreground/30" />
+                          )}
+                        </div>
+                        <div>
+                          <h3 className={`text-sm font-semibold ${step.status === "active" ? "text-primary" : "text-foreground"}`}>
+                            {step.title}
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {step.description}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === "code" && (
+              <motion.div
+                key="code"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex h-full overflow-hidden"
+              >
+                {/* File Explorer */}
+                <div className="w-64 border-r border-border bg-muted/10 flex flex-col shrink-0">
+                  <div className="p-4 border-b border-border flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project Files</span>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-2 space-y-1">
+                      {Object.keys(generatedFiles).length > 0 ? (
+                        Object.keys(generatedFiles).map(file => (
+                          <button
+                            key={file}
+                            onClick={() => setActiveFile(file)}
+                            className={`w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors ${activeFile === file ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"}`}
+                          >
+                            <FileText className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{file}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="p-4 text-center text-xs text-muted-foreground italic">
+                          No files generated yet
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                {/* Editor */}
+                <div className="flex-1 flex flex-col bg-[#1e1e1e]">
+                  <div className="flex items-center justify-between border-b border-white/5 bg-[#252526] px-4 py-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                      <FileText className="h-3 w-3" />
+                      {activeFile}
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-white" onClick={copyCode}>
+                      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  <div className="flex-1 relative">
+                    <Editor
+                      height="100%"
+                      defaultLanguage="javascript"
+                      language={activeFile.endsWith(".html") ? "html" : activeFile.endsWith(".css") ? "css" : "javascript"}
+                      value={generatedFiles[activeFile] || ""}
+                      theme="vs-dark"
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        readOnly: true,
+                        scrollBeyondLastLine: false,
+                        automaticLayout: true,
+                        wordWrap: "on",
+                        padding: { top: 16 }
+                      }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === "preview" && (
+              <motion.div
+                key="preview"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full bg-white flex flex-col"
+              >
+                {!finalPreviewHtml ? (
+                  <div className="flex h-full flex-col items-center justify-center bg-background p-6 text-center">
+                    <div className="relative mb-8 h-32 w-32">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 rounded-full border-t-2 border-primary"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Sparkles className="h-10 w-10 text-primary animate-pulse" />
+                      </div>
+                    </div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+                      Website oluşturuluyor...
+                    </h2>
+                    <p className="mt-4 max-w-md text-muted-foreground text-sm">
+                      Advanced Agentic Platform, modelleri orkestra ederek profesyonel mimarinizi inşa ediyor. Lütfen bekleyin.
+                    </p>
+                  </div>
+                ) : (
+                  <iframe
+                    ref={iframeRef}
+                    title="Site Preview"
+                    srcDoc={finalPreviewHtml}
+                    className="h-full w-full border-none"
+                    sandbox="allow-scripts allow-modals allow-forms"
+                  />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Global Prompt Bar */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-50">
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="relative overflow-hidden rounded-2xl border border-border bg-card/80 p-2 shadow-2xl backdrop-blur-xl ring-1 ring-white/10"
+          >
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Örn: Navbar ve Hero olan modern bir portfolyo oluştur..."
+                disabled={isGenerating}
+                className="flex-1 bg-transparent px-4 py-3 text-sm focus:outline-none disabled:opacity-50"
+              />
+              <Button
+                type="submit"
+                disabled={isGenerating || !prompt.trim()}
+                className="rounded-xl px-5 h-11 bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+              >
+                {isGenerating ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <span className="mr-2">Generate</span>
+                    <Send className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+          </motion.div>
+        </div>
+      </main>
+    </div>
+  )
+}
