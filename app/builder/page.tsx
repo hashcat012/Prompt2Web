@@ -133,6 +133,53 @@ export default function BuilderPage() {
             if (parsed.content) {
               fullContent += parsed.content
 
+              // Switch to CODE tab when we start getting files content
+              if (fullContent.includes('"files"') && activeTab !== "code") {
+                setActiveTab("code")
+              }
+
+              // REAL-TIME FILE EXTRACTION
+              // We look for patterns like "filename": "content..." in the growing JSON string
+              if (fullContent.includes('"files"')) {
+                try {
+                  // Extract the entire 'files' object content string
+                  const filesMatch = fullContent.match(/"files"\s*:\s*\{([\s\S]*?)(?:\}|,"indexFile")/)
+                  if (filesMatch) {
+                    const filesStr = filesMatch[1]
+                    // Match individual "key": "value" pairs
+                    // Note: This regex is simplified for real-time extraction
+                    const filePairs = filesStr.match(/"([^"]+)"\s*:\s*"([\s\S]*?)(?:"(?:\s*,|\s*)|$)/g)
+                    if (filePairs) {
+                      const tempFiles: Record<string, string> = { ...generatedFiles }
+                      filePairs.forEach(pair => {
+                        try {
+                          // Clean pair and split
+                          const splitIdx = pair.indexOf('":')
+                          if (splitIdx !== -1) {
+                            const name = pair.substring(1, splitIdx)
+                            let content = pair.substring(splitIdx + 3).trim()
+                            // Remove trailing quote and comma if they exist
+                            if (content.endsWith('",')) content = content.slice(0, -2)
+                            else if (content.endsWith('"')) content = content.slice(0, -1)
+
+                            // Unescape JSON characters (new lines, etc)
+                            const unescapedContent = content
+                              .replace(/\\n/g, '\n')
+                              .replace(/\\r/g, '\r')
+                              .replace(/\\t/g, '\t')
+                              .replace(/\\"/g, '"')
+                              .replace(/\\\\/g, '\\')
+
+                            tempFiles[name] = unescapedContent
+                          }
+                        } catch (e) { }
+                      })
+                      setGeneratedFiles(tempFiles)
+                    }
+                  }
+                } catch (e) { }
+              }
+
               // Live status updates from custom steps if they appear in the stream
               if (fullContent.includes('"steps"')) {
                 const stepsMatch = fullContent.match(/"steps"\s*:\s*\[([\s\S]*?)\]/)
