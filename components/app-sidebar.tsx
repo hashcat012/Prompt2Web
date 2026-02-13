@@ -13,7 +13,6 @@ import {
   Home,
   Code2,
   CreditCard,
-  Settings,
   Shield,
   ChevronLeft,
   ChevronRight,
@@ -40,7 +39,6 @@ export function AppSidebar() {
   ]
 
   const bottomItems = [
-    { href: "/settings", icon: Settings, label: t.nav.settings },
     ...(userData?.isAdmin
       ? [{ href: "/admin", icon: Shield, label: t.nav.admin }]
       : []),

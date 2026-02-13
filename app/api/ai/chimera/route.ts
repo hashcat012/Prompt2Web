@@ -39,11 +39,8 @@ You MUST respond with a single valid JSON object with this EXACT structure:
 {
   "overview": "# Project Title\\n\\n## Architecture\\n- Detailed architecture explanation\\n- Tech stack\\n- File structure\\n\\n## Features\\n- Feature list\\n\\n## Components\\n- Component breakdown",
   "steps": [
-    { "title": "Setup Project Structure", "description": "Create base HTML and folder structure", "status": "pending" },
-    { "title": "Build Components", "description": "Create reusable UI components", "status": "pending" },
-    { "title": "Add Styling", "description": "Implement CSS with animations", "status": "pending" },
-    { "title": "Implement Logic", "description": "Add JavaScript functionality", "status": "pending" },
-    { "title": "Final Polish", "description": "Optimize and refine", "status": "pending" }
+    { "title": "Step 1", "description": "Specific action for this prompt", "status": "pending" },
+    { "title": "Step 2", "description": "Next logical step", "status": "pending" }
   ],
   "files": {
     "index.html": "<!DOCTYPE html>... (Main HTML with proper structure, imports all CSS/JS)",
