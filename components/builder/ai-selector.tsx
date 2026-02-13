@@ -17,7 +17,7 @@ export type AIModel =
   | "tngtech/deepseek-r1t2-chimera:free"
   | "z-ai/glm-4.5-air:free"
   | "deepseek/deepseek-r1-0528:free"
-  | "qwen/qwen-2.5-coder-32b-instruct:free"
+  | "qwen/qwen3-coder:free"
 
 export type BuildMode = "fast" | "planning"
 
@@ -78,7 +78,7 @@ export function AISelector({
     { id: "tngtech/deepseek-r1t2-chimera:free", name: "R1T2 Chimera", desc: "Specialized architect", premium: true },
     { id: "z-ai/glm-4.5-air:free", name: "GLM-4.5 Air", desc: "Expert web coder", premium: true },
     { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1 v0528", desc: "Stable R1 version", premium: false },
-    { id: "qwen/qwen-2.5-coder-32b-instruct:free", name: "Qwen 2.5 Coder", desc: "High precision coding", premium: true },
+    { id: "qwen/qwen3-coder:free", name: "Qwen 3 Coder", desc: "High precision coding", premium: true },
   ]
 
   const activeModel = models.find((m) => m.id === model) || models[0]
