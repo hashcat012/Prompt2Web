@@ -14,7 +14,6 @@ import { ChevronDown } from "lucide-react"
 export type AIModel =
   | "groq"
   | "openai/gpt-oss-120b:free"
-  | "tngtech/deepseek-r1t2-chimera:free"
   | "z-ai/glm-4.5-air:free"
   | "deepseek/deepseek-r1-0528:free"
 
@@ -74,7 +73,6 @@ export function AISelector({
   const models: { id: AIModel; name: string; desc: string; premium?: boolean }[] = [
     { id: "groq", name: "Groq (Llama 3.3)", desc: "Ultra-fast generation", premium: false },
     { id: "openai/gpt-oss-120b:free", name: "GPT-OSS 120B", desc: "Massive open model", premium: true },
-    { id: "tngtech/deepseek-r1t2-chimera:free", name: "R1T2 Chimera", desc: "Specialized architect", premium: true },
     { id: "z-ai/glm-4.5-air:free", name: "GLM-4.5 Air", desc: "Expert web coder", premium: true },
     { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1 v0528", desc: "Stable R1 version", premium: false },
   ]
