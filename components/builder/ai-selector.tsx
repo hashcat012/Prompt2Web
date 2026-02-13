@@ -21,9 +21,8 @@ export type BuildMode = "fast" | "planning"
 
 interface AISelectorProps {
   model: AIModel
-  mode: BuildMode
+  // mode is assumed internal/fixed to Planning
   onModelChange: (m: AIModel) => void
-  onModeChange: (m: BuildMode) => void
   disabled?: boolean
   userPlan: string
 }
@@ -61,9 +60,7 @@ function ModelLogo({ model, className }: { model: AIModel; className?: string })
 
 export function AISelector({
   model,
-  mode,
   onModelChange,
-  onModeChange,
   disabled,
   userPlan,
 }: AISelectorProps) {
@@ -122,29 +119,6 @@ export function AISelector({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <div className="flex items-center rounded-lg border border-border bg-card p-0.5">
-        <button
-          onClick={() => onModeChange("fast")}
-          disabled={disabled}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${mode === "fast" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-        >
-          {t.builder.fast}
-        </button>
-        <button
-          onClick={() => {
-            if (isPaid) onModeChange("planning")
-          }}
-          disabled={disabled || !isPaid}
-          className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 ${mode === "planning" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
-            } ${!isPaid ? "cursor-not-allowed opacity-50" : ""}`}
-        >
-          {t.builder.planning}
-          {!isPaid && (
-            <span className="ml-1 rounded bg-muted-foreground/20 px-1 py-0.5 text-[9px] uppercase">Pro</span>
-          )}
-        </button>
-      </div>
     </div>
   )
 }

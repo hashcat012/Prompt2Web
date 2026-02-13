@@ -44,7 +44,7 @@ export default function BuilderPage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [model, setModel] = useState<AIModel>("groq")
-  const [mode, setMode] = useState<BuildMode>("fast")
+  const mode = "planning" // Enforce single planning mode
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
   const [activeFile, setActiveFile] = useState("index.html")
   const [finalPreviewHtml, setFinalPreviewHtml] = useState("")
@@ -78,9 +78,13 @@ export default function BuilderPage() {
     setActiveFile("index.html")
     setPlanSteps([])
 
+    // Always use chimera/openrouter for consistent planning behavior unless using groq specifically requested by user.
+    // Actually, "Groq Llama 3.3" is in the model list.
+    // But the user requested "Dynamic model selection" which we can't fully do in backend easily.
+    // We will route Groq to Groq route, others to Chimera/OpenRouter.
     let apiUrl = "/api/ai/groq"
     if (model === "groq") apiUrl = "/api/ai/groq"
-    else apiUrl = "/api/ai/chimera" // Everything else goes to OpenRouter (via chimera route which is now OpenRouter)
+    else apiUrl = "/api/ai/chimera" // Everything else goes to OpenRouter
 
     try {
       const res = await fetch(apiUrl, {
@@ -107,7 +111,7 @@ export default function BuilderPage() {
       const decoder = new TextDecoder()
       let streamBuffer = ""
 
-      if (mode === "planning") {
+      if (true) { // All modes are planning now
         // For planning mode, show initial steps
         const initialSteps: PlanStep[] = [
           { title: t.builder.analyzing, description: "Understanding your requirements...", status: "active" },
@@ -138,14 +142,17 @@ export default function BuilderPage() {
             if (parsed.content) {
               fullContent += parsed.content
 
-              // Extract code from content dynamically
               // Extract code and files from content dynamically
-              if (mode === "planning") {
-                try {
-                  const jsonStart = fullContent.indexOf("{")
-                  const jsonEnd = fullContent.lastIndexOf("}")
-                  if (jsonStart !== -1 && jsonEnd !== -1) {
-                    const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
+              // Since we are always in planning mode, we expect JSON-ish output possibly wrapped in markdown
+              try {
+                // Try to find the JSON object in the accumulated content
+                const jsonStart = fullContent.indexOf("{")
+                const jsonEnd = fullContent.lastIndexOf("}")
+                if (jsonStart !== -1 && jsonEnd !== -1) {
+                  const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
+                  // Try parsing the accumulated JSON candidates
+                  // Note: In streaming, this often fails until the end, but we try
+                  try {
                     const parsedJson = JSON.parse(jsonStr)
 
                     if (parsedJson.overview) {
@@ -165,34 +172,24 @@ export default function BuilderPage() {
                     } else if (parsedJson.code) {
                       setGeneratedFiles({ "index.html": parsedJson.code })
                     }
-                  }
-                } catch {
-                  // Partial JSON, try to extract whatever looks like HTML for preview
-                  const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
-                  if (htmlMatch) {
-                    setGeneratedFiles(prev => ({ ...prev, "index.html": htmlMatch[0] }))
-                  }
+                  } catch { }
                 }
-              } else {
-                // Fast mode
+              } catch {
+                // Partial JSON or HTML fallback
                 const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
                 if (htmlMatch) {
-                  setGeneratedFiles({ "index.html": htmlMatch[0] })
-                } else {
-                  setGeneratedFiles({ "index.html": fullContent })
+                  setGeneratedFiles(prev => ({ ...prev, "index.html": htmlMatch[0] }))
                 }
               }
             }
           } catch {
-            // skip unparseable fragments
+            // skip unparseable
           }
         }
       }
 
       // Final cleanup and complete all steps
-      if (mode === "planning") {
-        setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
-      }
+      setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
 
       setMessages((prev) => [
         ...prev,
@@ -264,9 +261,9 @@ export default function BuilderPage() {
             </div>
             <AISelector
               model={model}
-              mode={mode}
+              // mode is now internalized or fixed to 'planning'
               onModelChange={setModel}
-              onModeChange={setMode}
+
               disabled={loading}
               userPlan={userPlan}
             />
@@ -326,7 +323,7 @@ export default function BuilderPage() {
                     {msg.role === "assistant" && Object.values(generatedFiles).some(c => c.length > 0) ? (
                       <div className="flex flex-col gap-2">
                         <p className="text-muted-foreground">Project generated successfully!</p>
-                        {mode === "planning" && planSteps.length > 0 && (
+                        {planSteps.length > 0 && (
                           <PlanningSteps steps={planSteps} />
                         )}
                       </div>
@@ -344,7 +341,7 @@ export default function BuilderPage() {
                   className="flex justify-start"
                 >
                   <div className="rounded-2xl border border-border bg-card px-4 py-3">
-                    {mode === "planning" && planSteps.length > 0 ? (
+                    {planSteps.length > 0 ? (
                       <PlanningSteps steps={planSteps} />
                     ) : (
                       <div className="flex items-center gap-2">
@@ -394,7 +391,7 @@ export default function BuilderPage() {
               </Button>
             </div>
             <p className="mt-2 text-center text-[10px] text-muted-foreground uppercase tracking-widest">
-              {model.split("/").pop()?.split(":")[0] || model} | {mode === "fast" ? t.builder.fast : t.builder.planning}
+              {model.split("/").pop()?.split(":")[0] || model} | Planning Mode
             </p>
           </div>
         </motion.div>
