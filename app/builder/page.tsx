@@ -43,7 +43,7 @@ export default function BuilderPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
-  const [model, setModel] = useState<AIModel>("gemini")
+  const [model, setModel] = useState<AIModel>("groq")
   const [mode, setMode] = useState<BuildMode>("fast")
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
   const [activeFile, setActiveFile] = useState("index.html")
@@ -79,8 +79,8 @@ export default function BuilderPage() {
     setPlanSteps([])
 
     let apiUrl = "/api/ai/groq"
-    if (model === "gemini" || model === "gemini-flash") apiUrl = "/api/ai/gemini"
-    else if (model.includes("/") || model.includes("free") || model.includes("chimera") || model.includes("deepseek")) apiUrl = "/api/ai/chimera"
+    if (model === "groq") apiUrl = "/api/ai/groq"
+    else apiUrl = "/api/ai/chimera" // Everything else goes to OpenRouter (via chimera route which is now OpenRouter)
 
     try {
       const res = await fetch(apiUrl, {

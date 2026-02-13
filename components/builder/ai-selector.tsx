@@ -13,13 +13,11 @@ import { ChevronDown } from "lucide-react"
 
 export type AIModel =
   | "groq"
-  | "gemini"
-  | "gemini-flash"
-  | "deepseek/deepseek-r1-0528:free"
-  | "glm-4.5-air:free"
-  | "deepseek-r1t2-chimera:free"
-  | "deepseek-r1-distill-qwen-32b:free"
   | "openai/gpt-oss-120b:free"
+  | "tngtech/deepseek-r1t2-chimera:free"
+  | "z-ai/glm-4.5-air:free"
+  | "deepseek/deepseek-r1-0528:free"
+  | "qwen/qwen-2.5-coder-32b-instruct:free"
 
 export type BuildMode = "fast" | "planning"
 
@@ -33,14 +31,7 @@ interface AISelectorProps {
 }
 
 function ModelLogo({ model, className }: { model: AIModel; className?: string }) {
-  if (model === "gemini") {
-    return (
-      <svg className={className} viewBox="0 0 24 24" fill="none">
-        <rect width="24" height="24" rx="6" fill="#1A73E8" fillOpacity="0.1" />
-        <path d="M12 4L4 12l8 8 8-8-8-8z" fill="#1A73E8" />
-      </svg>
-    )
-  }
+
   if (model === "groq") {
     return (
       <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -83,11 +74,11 @@ export function AISelector({
 
   const models: { id: AIModel; name: string; desc: string; premium?: boolean }[] = [
     { id: "groq", name: "Groq (Llama 3.3)", desc: "Ultra-fast generation", premium: false },
-    { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1 v0528", desc: "Stable R1 version", premium: false },
-    { id: "glm-4.5-air:free", name: "GLM-4.5 Air", desc: "Expert web coder", premium: true },
-    { id: "deepseek-r1t2-chimera:free", name: "R1T2 Chimera", desc: "Specialized architect", premium: true },
-    { id: "deepseek-r1-distill-qwen-32b:free", name: "R1 Qwen 32B", desc: "High precision coding", premium: true },
     { id: "openai/gpt-oss-120b:free", name: "GPT-OSS 120B", desc: "Massive open model", premium: true },
+    { id: "tngtech/deepseek-r1t2-chimera:free", name: "R1T2 Chimera", desc: "Specialized architect", premium: true },
+    { id: "z-ai/glm-4.5-air:free", name: "GLM-4.5 Air", desc: "Expert web coder", premium: true },
+    { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1 v0528", desc: "Stable R1 version", premium: false },
+    { id: "qwen/qwen-2.5-coder-32b-instruct:free", name: "Qwen 2.5 Coder", desc: "High precision coding", premium: true },
   ]
 
   const activeModel = models.find((m) => m.id === model) || models[0]
