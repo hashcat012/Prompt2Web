@@ -5,8 +5,8 @@ export const runtime = "edge"
 export async function POST(req: Request) {
     try {
         const { prompt, model } = await req.json()
-        const apiKey = process.env.CHIMERA_API_KEY
-        const apiUrl = "https://chimeragpt.adproqx.com/v1/chat/completions"
+        const apiKey = process.env.OPENROUTER_API_KEY || process.env.CHIMERA_API_KEY
+        const apiUrl = "https://openrouter.ai/api/v1/chat/completions"
 
         if (!apiKey) {
             return NextResponse.json({ error: "API key is missing" }, { status: 500 })
@@ -63,14 +63,7 @@ CRITICAL: I want a MASSIVE amount of code. Don't be lazy. Use the full 8000 toke
 
         let selectedModel = model
         if (model === "auto" || !model) {
-            const lowerPrompt = prompt.toLowerCase()
-            if (lowerPrompt.includes("design") || lowerPrompt.includes("ui") || lowerPrompt.includes("css") || lowerPrompt.includes("animation")) {
-                selectedModel = "z-ai/glm-4.5-air:free"
-            } else if (lowerPrompt.includes("backend") || lowerPrompt.includes("api") || lowerPrompt.includes("database") || lowerPrompt.includes("logic")) {
-                selectedModel = "deepseek/deepseek-r1-0528:free"
-            } else {
-                selectedModel = "openai/gpt-oss-120b:free"
-            }
+            selectedModel = "google/gemini-2.0-flash-exp:free"
         }
 
         const messages = [
@@ -82,7 +75,9 @@ CRITICAL: I want a MASSIVE amount of code. Don't be lazy. Use the full 8000 toke
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
+                Authorization: apiKey.startsWith("Bearer") ? apiKey : `Bearer ${apiKey}`,
+                "HTTP-Referer": "https://prompt2web.vercel.app",
+                "X-Title": "Prompt2Web",
             },
             body: JSON.stringify({
                 model: selectedModel,
@@ -95,7 +90,8 @@ CRITICAL: I want a MASSIVE amount of code. Don't be lazy. Use the full 8000 toke
 
         if (!response.ok) {
             const errorText = await response.text()
-            return NextResponse.json({ error: "Chimera API error", details: errorText }, { status: response.status })
+            console.error("OpenRouter Error:", errorText)
+            return NextResponse.json({ error: "OpenRouter API error", details: errorText }, { status: response.status })
         }
 
         const stream = new ReadableStream({
@@ -145,7 +141,7 @@ CRITICAL: I want a MASSIVE amount of code. Don't be lazy. Use the full 8000 toke
             },
         })
     } catch (error) {
-        console.error("Chimera Route Error:", error)
+        console.error("Chimera/OpenRouter Route Error:", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
