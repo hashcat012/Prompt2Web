@@ -58,18 +58,18 @@ MANDATORY PROJECT STRUCTURE RULES:
    - Each component should be a class or function
    - Components should be modular and reusable
 4. **Styling Architecture**:
-   - styles/main.css: CSS variables, resets, global styles
-   - styles/components.css: Component-specific styles
-   - styles/animations.css: All @keyframes and transitions
+   - styles/main.css: CSS variables, resets, global styles (MASSIVE AND DETAILED)
+   - styles/components.css: Component-specific styles (MASSIVE AND DETAILED)
+   - styles/animations.css: All @keyframes and transitions (MASSIVE AND DETAILED)
 5. **JavaScript Architecture**:
-   - scripts/app.js: Main entry point, initializes everything
-   - scripts/components/: UI components (Navbar, Hero, Card, etc.)
-   - scripts/utils/: Helper functions, API calls, utilities
-   - scripts/config.js: Constants, API keys (placeholder), settings
+   - scripts/app.js: Main entry point, initializes everything (MASSIVE AND DETAILED)
+   - scripts/components/: UI components (Navbar, Hero, Card, etc.) (MASSIVE AND DETAILED)
+   - scripts/utils/: Helper functions, API calls, utilities (MASSIVE AND DETAILED)
+   - scripts/config.js: Constants, API keys (placeholder), settings (MASSIVE AND DETAILED)
 
 AESTHETIC REQUIREMENTS:
-- Modern, premium design (glassmorphism, gradients, shadows)
-- Smooth animations (fade-in, slide-up, hover effects)
+- Modern, premium design (glassmorphism, gradients, shadows) (MASSIVE AND DETAILED)
+- Smooth animations (fade-in, slide-up, hover effects) (MASSIVE AND DETAILED)
 - Dark mode by default with proper color scheme
 - Responsive design (mobile-first approach)
 - Professional typography (use Google Fonts)
@@ -81,6 +81,7 @@ TECHNICAL REQUIREMENTS:
 - Lucide icons via CDN
 - All code must be production-ready, no placeholders
 - Proper error handling and edge cases
+- ALL FILES MUST BE LONG AND DETAILED. NO SHORT CUT-OFFS.
 
 RESPONSE FORMAT:
 - Respond ONLY with the JSON object
@@ -104,7 +105,7 @@ RESPONSE FORMAT:
             { role: "user", content: prompt },
           ],
           temperature: 0.7,
-          max_tokens: 4000,
+          max_tokens: 8000,
           stream: true,
         }),
       }
