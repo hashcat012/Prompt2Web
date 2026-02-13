@@ -7,12 +7,18 @@ export async function POST(req: NextRequest) {
     try {
         const { prompt, mode, model } = await req.json()
 
-        // Key mapping based on model
+        // Determine endpoint and key based on model
         let rawKey = ""
+        let apiUrl = ""
+
         if (model === "openai/gpt-oss-120b:free" || model === "deepseek/deepseek-r1-0528:free") {
             rawKey = process.env.OPENROUTER_API_KEY || ""
+            apiUrl = "https://openrouter.ai/api/v1/chat/completions"
         } else {
             rawKey = process.env.CHIMERA_API_KEY || ""
+            // Use specific endpoint for Chimera models to avoid "Failed to authenticate request with Clerk" error
+            // which likely comes from hitting the wrong provider endpoint
+            apiUrl = "https://chimeragpt.adventblocks.cc/api/v1/chat/completions"
         }
 
         const apiKey = rawKey.trim().startsWith("Bearer ") ? rawKey.trim() : `Bearer ${rawKey.trim()}`
@@ -54,7 +60,7 @@ Respond ONLY with valid JSON.`
 Ensure "index.html" is a master file that renders everything with Tailwind and animations.
 Respond ONLY with JSON containing the "files" map.`
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

@@ -82,8 +82,6 @@ export function AISelector({
   const isPaid = userPlan !== "free"
 
   const models: { id: AIModel; name: string; desc: string; premium?: boolean }[] = [
-    { id: "gemini", name: "Gemini 2.5 Pro", desc: "Google's strongest model", premium: true },
-    { id: "gemini-flash", name: "Gemini 2.5 Flash", desc: "Fast & Efficient", premium: false },
     { id: "groq", name: "Groq (Llama 3.3)", desc: "Ultra-fast generation", premium: false },
     { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1 v0528", desc: "Stable R1 version", premium: false },
     { id: "glm-4.5-air:free", name: "GLM-4.5 Air", desc: "Expert web coder", premium: true },
