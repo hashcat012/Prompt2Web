@@ -54,6 +54,17 @@ Respond ONLY with valid JSON.`
 Ensure "index.html" is a master file that renders everything with Tailwind and animations.
 Respond ONLY with JSON containing the "files" map.`
 
+        // Construct messages array
+        const messages = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+        ]
+
+        // For specific models known to be finicky on OpenRouter free tier, we can try to simplify the prompt structure
+        // if the user continues to face "Provider returned error" which often means upstream rejection.
+        // However, standard OpenRouter usage implies system prompt is fine.
+        // Let's ensure we are not sending excessive tokens or invalid parameters.
+
         const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
@@ -64,13 +75,12 @@ Respond ONLY with JSON containing the "files" map.`
             },
             body: JSON.stringify({
                 model: model || "openai/gpt-oss-120b:free",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: prompt },
-                ],
+                messages: messages,
                 temperature: 0.7,
                 max_tokens: 4000,
                 stream: true,
+                // Add specific provider preferences if needed
+                // provider: { allow_fallbacks: false } 
             }),
         })
 
