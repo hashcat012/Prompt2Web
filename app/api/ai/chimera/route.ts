@@ -7,19 +7,13 @@ export async function POST(req: NextRequest) {
     try {
         const { prompt, mode, model } = await req.json()
 
-        // Determine endpoint and key based on model
-        let rawKey = ""
-        let apiUrl = ""
+        // All these models provided by the user (ending in :free) are hosted on OpenRouter.
+        // We will strictly use the OpenRouter endpoint and key.
+        // If the user provided a separate CHIMERA_API_KEY, we will fallback to it only if OPENROUTER_API_KEY is missing,
+        // specifically for the "chimera" named model, but generally OpenRouter key is preferred for OpenRouter.
 
-        if (model === "openai/gpt-oss-120b:free" || model === "deepseek/deepseek-r1-0528:free") {
-            rawKey = process.env.OPENROUTER_API_KEY || ""
-            apiUrl = "https://openrouter.ai/api/v1/chat/completions"
-        } else {
-            rawKey = process.env.CHIMERA_API_KEY || ""
-            // Use specific endpoint for Chimera models to avoid "Failed to authenticate request with Clerk" error
-            // which likely comes from hitting the wrong provider endpoint
-            apiUrl = "https://chimeragpt.adventblocks.cc/api/v1/chat/completions"
-        }
+        const rawKey = process.env.OPENROUTER_API_KEY || process.env.CHIMERA_API_KEY || ""
+        const apiUrl = "https://openrouter.ai/api/v1/chat/completions"
 
         const apiKey = rawKey.trim().startsWith("Bearer ") ? rawKey.trim() : `Bearer ${rawKey.trim()}`
 
@@ -65,7 +59,7 @@ Respond ONLY with JSON containing the "files" map.`
             headers: {
                 "Content-Type": "application/json",
                 Authorization: apiKey,
-                "HTTP-Referer": "https://prompt2web.vercel.app", // Adjust if needed
+                "HTTP-Referer": "https://prompt2web.vercel.app",
                 "X-Title": "Prompt2Web",
             },
             body: JSON.stringify({
@@ -88,7 +82,7 @@ Respond ONLY with JSON containing the "files" map.`
                 errorDetails = parsedError.error?.message || errorText
             } catch { }
             return NextResponse.json(
-                { error: "Chimera/OpenRouter API error", details: errorDetails },
+                { error: "OpenRouter API error", details: errorDetails },
                 { status: response.status }
             )
         }
@@ -121,8 +115,18 @@ Respond ONLY with JSON containing the "files" map.`
                         }
                         try {
                             const parsed = JSON.parse(data)
+                            // Check for standard content
                             const content = parsed.choices?.[0]?.delta?.content
-                            if (content) {
+
+                            // Check for error in the stream
+                            if (parsed.error) {
+                                const errorMessage = parsed.error.message || "Unknown stream error"
+                                controller.enqueue(
+                                    new TextEncoder().encode(
+                                        `data: ${JSON.stringify({ content: `\n\n[Error: ${errorMessage}]` })}\n\n`
+                                    )
+                                )
+                            } else if (content) {
                                 controller.enqueue(
                                     new TextEncoder().encode(
                                         `data: ${JSON.stringify({ content })}\n\n`
@@ -144,7 +148,7 @@ Respond ONLY with JSON containing the "files" map.`
             },
         })
     } catch (error) {
-        console.error("Chimera Route Error:", error)
+        console.error("Chimera/OpenRouter Route Error:", error)
         return NextResponse.json(
             { error: "Internal server error", details: String(error) },
             { status: 500 }
