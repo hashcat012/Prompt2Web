@@ -57,16 +57,32 @@ RULES:
 - Elite Aesthetics: Dark mode by default, glassmorphism, nice gradients.
 - Respond ONLY with the JSON object. Do not add markdown code blocks around the JSON.`
 
+        // DYNAMIC MODEL SELECTION (AUTO-PILOT)
+        // Analyze the prompt to pick the best model from available free options:
+        // - UI/Frontend -> GLM-4.5 Air or Qwen
+        // - Backend/Logic -> DeepSeek R1 / Qwen
+        // - General/Planning -> GPT-OSS 120B
+
+        // Since we are receiving "model: auto" from frontend, we decide here.
+        let selectedModel = model;
+        if (model === "auto" || !model) {
+            const lowerPrompt = prompt.toLowerCase();
+            if (lowerPrompt.includes("design") || lowerPrompt.includes("ui") || lowerPrompt.includes("css") || lowerPrompt.includes("animation")) {
+                selectedModel = "z-ai/glm-4.5-air:free"; // Great for frontend/creative
+            } else if (lowerPrompt.includes("backend") || lowerPrompt.includes("api") || lowerPrompt.includes("database") || lowerPrompt.includes("logic")) {
+                selectedModel = "deepseek/deepseek-r1-0528:free"; // Strong logic
+            } else {
+                selectedModel = "openai/gpt-oss-120b:free"; // Balanced planner
+            }
+        }
+
         // Construct messages array
         const messages = [
             { role: "system", content: systemPrompt },
             { role: "user", content: prompt },
         ]
 
-        // For specific models known to be finicky on OpenRouter free tier, we can try to simplify the prompt structure
-        // if the user continues to face "Provider returned error" which often means upstream rejection.
-        // However, standard OpenRouter usage implies system prompt is fine.
-        // Let's ensure we are not sending excessive tokens or invalid parameters.
+        const chosenModel = selectedModel; // Alias for clarity
 
         const response = await fetch(apiUrl, {
             method: "POST",
@@ -77,7 +93,7 @@ RULES:
                 "X-Title": "Prompt2Web",
             },
             body: JSON.stringify({
-                model: model || "openai/gpt-oss-120b:free",
+                model: chosenModel,
                 messages: messages,
                 temperature: 0.7,
                 max_tokens: 4000,

@@ -43,7 +43,7 @@ export default function BuilderPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
-  const [model, setModel] = useState<AIModel>("groq")
+  // const [model, setModel] = useState<AIModel>("groq") // Managed internally now
   const mode = "planning" // Enforce single planning mode
   const [generatedFiles, setGeneratedFiles] = useState<Record<string, string>>({ "index.html": "" })
   const [activeFile, setActiveFile] = useState("index.html")
@@ -79,18 +79,16 @@ export default function BuilderPage() {
     setPlanSteps([])
 
     // Always use chimera/openrouter for consistent planning behavior unless using groq specifically requested by user.
-    // Actually, "Groq Llama 3.3" is in the model list.
-    // But the user requested "Dynamic model selection" which we can't fully do in backend easily.
-    // We will route Groq to Groq route, others to Chimera/OpenRouter.
-    let apiUrl = "/api/ai/groq"
-    if (model === "groq") apiUrl = "/api/ai/groq"
-    else apiUrl = "/api/ai/chimera" // Everything else goes to OpenRouter
+    // Actually, "Groq Llama 3.3" is in the model list but we are in Auto-Pilot.
+    // We will route everything to Chimera (OpenRouter) and let it decide or default to the best model.
+    // For now we default to the best available free model on OpenRouter via the chimera route "openai/gpt-oss-120b:free".
+    const apiUrl = "/api/ai/chimera"
 
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: userMessage, mode, model }),
+        body: JSON.stringify({ prompt: userMessage, mode, model: "auto" }),
       })
 
       if (!res.ok) {
@@ -259,14 +257,10 @@ export default function BuilderPage() {
               <Sparkles className="h-4 w-4" />
               <span className="text-sm font-semibold">AI Builder</span>
             </div>
-            <AISelector
-              model={model}
-              // mode is now internalized or fixed to 'planning'
-              onModelChange={setModel}
-
-              disabled={loading}
-              userPlan={userPlan}
-            />
+            <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 shadow-sm">
+              <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+              <span className="text-xs font-medium">Auto-Pilot Active</span>
+            </div>
           </div>
 
           {/* Messages */}
@@ -391,7 +385,7 @@ export default function BuilderPage() {
               </Button>
             </div>
             <p className="mt-2 text-center text-[10px] text-muted-foreground uppercase tracking-widest">
-              {model.split("/").pop()?.split(":")[0] || model} | Planning Mode
+              Automatic Model Selection
             </p>
           </div>
         </motion.div>
