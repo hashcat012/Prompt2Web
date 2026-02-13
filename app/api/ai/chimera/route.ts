@@ -12,7 +12,15 @@ export async function POST(req: NextRequest) {
         // If the user provided a separate CHIMERA_API_KEY, we will fallback to it only if OPENROUTER_API_KEY is missing,
         // specifically for the "chimera" named model, but generally OpenRouter key is preferred for OpenRouter.
 
-        const rawKey = process.env.OPENROUTER_API_KEY || process.env.CHIMERA_API_KEY || ""
+        // Initial key lookup
+        let rawKey = process.env.OPENROUTER_API_KEY || process.env.CHIMERA_API_KEY || ""
+
+        // Specific override for R1T2 Chimera as per user request to use a specific key if available or needed
+        if (model === "tngtech/deepseek-r1t2-chimera:free") {
+            // User provided a specific key for this model
+            rawKey = "sk-3_L-JPkzYloOUbZtiORxvUVK9qSVkcG6kG-Yph2xFclguAUo324bllhtQIglEHNHRw3XrrB1T_60BL2IEBvqdNr7HdU"
+        }
+
         const apiUrl = "https://openrouter.ai/api/v1/chat/completions"
 
         const apiKey = rawKey.trim().startsWith("Bearer ") ? rawKey.trim() : `Bearer ${rawKey.trim()}`
