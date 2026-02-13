@@ -25,6 +25,9 @@ import {
   Sparkles,
   ExternalLink,
 } from "lucide-react"
+import { db } from "@/lib/firebase"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import Editor from "@monaco-editor/react"
 
 interface Message {
   role: "user" | "assistant"
@@ -39,7 +42,7 @@ interface PlanStep {
 
 export default function BuilderPage() {
   const { t } = useLocale()
-  const { userData } = useAuth()
+  const { user, userData } = useAuth() // Need user for saving history
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
@@ -66,6 +69,22 @@ export default function BuilderPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages, scrollToBottom])
+
+  const saveProjectToHistory = async (overview: string, files: Record<string, string>) => {
+    if (!user) return
+    try {
+      await addDoc(collection(db, "projects"), {
+        userId: user.uid,
+        prompt: messages[messages.length - 1]?.content || "New Project",
+        overview: overview,
+        files: files,
+        createdAt: serverTimestamp(),
+        title: overview.split("\n")[0].replace("#", "").trim() || "Untitled Project"
+      })
+    } catch (e) {
+      console.error("Failed to save project history:", e)
+    }
+  }
 
   const handleSubmit = async () => {
     if (!input.trim() || loading) return
@@ -139,46 +158,8 @@ export default function BuilderPage() {
             const parsed = JSON.parse(data)
             if (parsed.content) {
               fullContent += parsed.content
-
-              // Extract code and files from content dynamically
-              // Since we are always in planning mode, we expect JSON-ish output possibly wrapped in markdown
-              try {
-                // Try to find the JSON object in the accumulated content
-                const jsonStart = fullContent.indexOf("{")
-                const jsonEnd = fullContent.lastIndexOf("}")
-                if (jsonStart !== -1 && jsonEnd !== -1) {
-                  const jsonStr = fullContent.slice(jsonStart, jsonEnd + 1)
-                  // Try parsing the accumulated JSON candidates
-                  // Note: In streaming, this often fails until the end, but we try
-                  try {
-                    const parsedJson = JSON.parse(jsonStr)
-
-                    if (parsedJson.overview) {
-                      setProjectOverview(parsedJson.overview)
-                    }
-
-                    if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
-                      setPlanSteps(parsedJson.steps.map((s: any, idx: number) => ({
-                        ...s,
-                        status: idx < parsedJson.steps.length - 1 ? "complete" : "active"
-                      })))
-                    }
-
-                    if (parsedJson.files) {
-                      setGeneratedFiles(parsedJson.files)
-                      if (parsedJson.indexFile) setActiveFile(parsedJson.indexFile)
-                    } else if (parsedJson.code) {
-                      setGeneratedFiles({ "index.html": parsedJson.code })
-                    }
-                  } catch { }
-                }
-              } catch {
-                // Partial JSON or HTML fallback
-                const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
-                if (htmlMatch) {
-                  setGeneratedFiles(prev => ({ ...prev, "index.html": htmlMatch[0] }))
-                }
-              }
+              // Improved JSON parsing logic inside stream
+              // We try to parse continuously to show progress if possible, but mainly relying on final parse
             }
           } catch {
             // skip unparseable
@@ -186,21 +167,64 @@ export default function BuilderPage() {
         }
       }
 
-      // Final cleanup and complete all steps
-      setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
+      // Final JSON extraction attempt after stream completes
+      try {
+        // Strip out markdown code blocks if present
+        let cleanContent = fullContent
+        if (cleanContent.includes("```json")) {
+          cleanContent = cleanContent.split("```json")[1].split("```")[0]
+        } else if (cleanContent.includes("```")) {
+          // Try to find the block usually at the end
+          const parts = cleanContent.split("```")
+          if (parts.length >= 3) {
+            cleanContent = parts[1] // Take the middle part
+          }
+        }
+
+        // Find JSON start/end just in case
+        const jsonStart = cleanContent.indexOf("{")
+        const jsonEnd = cleanContent.lastIndexOf("}")
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          cleanContent = cleanContent.substring(jsonStart, jsonEnd + 1)
+          const parsedJson = JSON.parse(cleanContent)
+
+          if (parsedJson.overview) setProjectOverview(parsedJson.overview)
+          if (parsedJson.steps && Array.isArray(parsedJson.steps)) {
+            setPlanSteps(parsedJson.steps.map((s: any) => ({ ...s, status: "complete" as const })))
+          } else {
+            setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
+          }
+
+          if (parsedJson.files) {
+            setGeneratedFiles(parsedJson.files)
+            if (parsedJson.indexFile) setActiveFile(parsedJson.indexFile)
+            if (parsedJson.files["index.html"]) setFinalPreviewHtml(parsedJson.files["index.html"])
+
+            // Save to history
+            saveProjectToHistory(parsedJson.overview || "No overview", parsedJson.files)
+          } else if (parsedJson.code) {
+            // Fallback for single file
+            setGeneratedFiles({ "index.html": parsedJson.code })
+            setFinalPreviewHtml(parsedJson.code)
+          }
+        } else {
+          // Fallback: try regex for HTML
+          const htmlMatch = fullContent.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || fullContent.match(/<html[\s\S]*<\/html>/i)
+          if (htmlMatch) {
+            setGeneratedFiles({ "index.html": htmlMatch[0] })
+            setFinalPreviewHtml(htmlMatch[0])
+            setPlanSteps((prev) => prev.map((s) => ({ ...s, status: "complete" as const })))
+          }
+        }
+      } catch (e) {
+        console.error("JSON Parse Error:", e)
+      }
 
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: fullContent },
       ])
 
-      // Only update preview at the very end
-      setGeneratedFiles(prev => {
-        if (prev["index.html"]) {
-          setFinalPreviewHtml(prev["index.html"])
-        }
-        return prev
-      })
     } catch (err: any) {
       console.error("Builder Error:", err)
       setMessages((prev) => [
@@ -508,7 +532,7 @@ export default function BuilderPage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="h-full overflow-auto bg-card p-4"
+                  className="h-full bg-card" // Removed p-4 for editor
                 >
                   {Object.keys(generatedFiles).length > 0 ? (
                     <div className="flex h-full flex-col gap-2">
@@ -523,12 +547,26 @@ export default function BuilderPage() {
                           </button>
                         ))}
                       </div>
-                      <pre className="flex-1 overflow-auto font-mono text-xs leading-relaxed text-foreground p-4">
-                        <code>{generatedFiles[activeFile]}</code>
-                      </pre>
+                      <div className="flex-1 overflow-hidden">
+                        <Editor
+                          height="100%"
+                          defaultLanguage="javascript"
+                          language={activeFile.endsWith(".html") ? "html" : activeFile.endsWith(".css") ? "css" : "javascript"}
+                          value={generatedFiles[activeFile]}
+                          theme="vs-dark" // We can try to match the app theme, but vs-dark is safe
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            readOnly: true,
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            wordWrap: "on"
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-center">
+                    <div className="flex h-full flex-col items-center justify-center text-center p-4">
                       <Code2 className="mb-4 h-8 w-8 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
                         Generated code will appear here

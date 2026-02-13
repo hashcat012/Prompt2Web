@@ -34,9 +34,8 @@ export function AppSidebar() {
   const navItems = [
     { href: "/", icon: Home, label: t.nav.home },
     { href: "/builder", icon: Code2, label: t.nav.builder },
-    { href: "/projects", icon: FolderOpen, label: t.nav.dashboard },
-    { href: "/pricing", icon: CreditCard, label: t.nav.pricing },
     { href: "/history", icon: History, label: "History" },
+    { href: "/pricing", icon: CreditCard, label: t.nav.pricing },
     { href: "/templates", icon: Layers, label: "Templates" },
   ]
 
@@ -95,13 +94,11 @@ export function AppSidebar() {
               <Link key={item.href} href={item.href}>
                 <Button
                   variant="ghost"
-                  className={`w-full justify-start gap-3 transition-all duration-200 ${
-                    collapsed ? "px-0 justify-center" : ""
-                  } ${
-                    isActive
+                  className={`w-full justify-start gap-3 transition-all duration-200 ${collapsed ? "px-0 justify-center" : ""
+                    } ${isActive
                       ? "bg-accent text-accent-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                  }`}
+                    }`}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
                   <AnimatePresence>
@@ -132,13 +129,11 @@ export function AppSidebar() {
             <Link key={item.href} href={item.href}>
               <Button
                 variant="ghost"
-                className={`w-full justify-start gap-3 transition-all duration-200 ${
-                  collapsed ? "px-0 justify-center" : ""
-                } ${
-                  isActive
+                className={`w-full justify-start gap-3 transition-all duration-200 ${collapsed ? "px-0 justify-center" : ""
+                  } ${isActive
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                }`}
+                  }`}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
                 <AnimatePresence>
@@ -166,42 +161,58 @@ export function AppSidebar() {
 
         {/* User profile */}
         {user && (
-          <div className={`mt-2 flex items-center gap-3 rounded-lg p-2 ${collapsed ? "justify-center" : ""}`}>
-            <Avatar className="h-8 w-8 shrink-0">
-              <AvatarImage src={user.photoURL || undefined} />
-              <AvatarFallback className="bg-foreground text-background text-xs">
-                {user.displayName?.charAt(0) || user.email?.charAt(0) || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: "auto" }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="flex flex-1 items-center justify-between overflow-hidden"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {user.displayName || "User"}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {userData?.plan || "free"}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={signOut}
+          <Link href="/settings" className={`mt-2 block rounded-lg hover:bg-accent/50 transition-colors`}>
+            <div className={`flex items-center gap-3 p-2 ${collapsed ? "justify-center" : ""}`}>
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarImage src={user.photoURL || undefined} />
+                <AvatarFallback className="bg-foreground text-background text-xs">
+                  {user.displayName?.charAt(0) || user.email?.charAt(0) || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <AnimatePresence>
+                {!collapsed && (
+                  <motion.div
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: "auto" }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex flex-1 items-center justify-between overflow-hidden"
                   >
-                    <LogOut className="h-3.5 w-3.5" />
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    <div className="min-w-0 text-left">
+                      <p className="truncate text-sm font-medium">
+                        {user.displayName || "User"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {userData?.plan || "free"}
+                      </p>
+                    </div>
+                    {/* LogOut button moved outside link or handled separately? 
+                        Ideally logout shouldn't trigger navigation to settings. 
+                        Let's keep logout button separate or verify if nesting button inside link is okay (it's not valid HTML).
+                        We should use a div with onClick for navigation on the parent, or restructure.
+                        Actually, Next.js Link wraps children. A button inside might cause hydration issues or navigation conflict.
+                        I'll use a click handler on the container div for navigation instead of Link wrapper if I keep the button inside.
+                        OR, move the Logout button out. 
+                        Let's move Logout button out of the clickable profile area, perhaps to the bottom items or next to theme toggle?
+                        Or just keep it here but stop propagation on the button click.
+                    */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive z-10"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        signOut()
+                      }}
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </Link>
         )}
       </div>
     </motion.aside>
